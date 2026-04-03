@@ -1,0 +1,37 @@
+[
+  {
+    "project": {
+      "name": "Alpha"
+    },
+    "tasks": [
+      {
+        "id": "A-01",
+        "duration": 5
+      },
+      {
+        "id": "A-02",
+        "duration": 7,
+        "tags": [
+          "critical"
+        ]
+      }
+    ],
+    "metadata": {
+      "priority": 1
+    }
+  },
+  {
+    "project": {
+      "name": "Beta"
+    },
+    "tasks": [
+      {
+        "id": "B-01",
+        "duration": 3
+      }
+    ],
+    "metadata": {
+      "priority": 2
+    }
+  }
+]
