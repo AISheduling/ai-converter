@@ -126,6 +126,8 @@ def pack_profile_evidence(
 
 
 def _pack_field(field: FieldProfile) -> PackedFieldEvidence:
+    """Convert a field profile into compact packed evidence."""
+
     return PackedFieldEvidence(
         path=field.path,
         observed_types=[entry.type_name for entry in field.observed_types],
@@ -140,6 +142,8 @@ def _pack_field(field: FieldProfile) -> PackedFieldEvidence:
 
 
 def _pack_sample(sample: SampleRecord) -> PackedSampleEvidence:
+    """Convert a representative sample into compact packed evidence."""
+
     return PackedSampleEvidence(
         index=sample.index,
         record_id=sample.record_id,
@@ -149,10 +153,14 @@ def _pack_sample(sample: SampleRecord) -> PackedSampleEvidence:
 
 
 def _estimate_size(bundle: PackedEvidenceBundle) -> int:
+    """Estimate the serialized size of an evidence bundle."""
+
     return len(json.dumps(bundle.model_dump(mode="json"), sort_keys=True, ensure_ascii=True))
 
 
 def _ensure_at_least_one_sample(bundle: PackedEvidenceBundle, sample: SampleRecord) -> PackedEvidenceBundle:
+    """Try to preserve at least one representative sample within the budget."""
+
     candidate = bundle.model_copy(deep=True)
     while candidate.fields:
         candidate.fields.pop()
@@ -166,6 +174,8 @@ def _ensure_at_least_one_sample(bundle: PackedEvidenceBundle, sample: SampleReco
 
 
 def _field_score(field: FieldProfile) -> float:
+    """Score a field profile by how valuable it is for packed evidence."""
+
     score = field.present_ratio + field.unique_ratio
     if field.candidate_id:
         score += 1.0

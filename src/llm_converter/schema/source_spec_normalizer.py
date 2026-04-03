@@ -48,10 +48,14 @@ def normalize_source_field(field: SourceFieldSpec) -> SourceFieldSpec:
 
 
 def _path_leaf(path: str) -> str:
+    """Return the terminal token for a normalized source path."""
+
     leaf = path.split(".")[-1]
     return leaf.replace("[]", "") or "value"
 
 
 def _canonical_identifier(value: str) -> str:
+    """Convert free-form text into a stable snake_case identifier."""
+
     collapsed = _TOKEN_PATTERN.sub("_", value.strip().lower())
     return collapsed.strip("_")

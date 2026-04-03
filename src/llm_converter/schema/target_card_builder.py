@@ -24,6 +24,8 @@ def build_target_schema_card(model_type: type[BaseModel]) -> TargetSchemaCard:
 
 
 def _build_field_card(name: str, annotation: Any, field_info: Any, path: str) -> TargetFieldCard:
+    """Build a compact target-card field, including nested child fields."""
+
     base_annotation, required = _unwrap_optional(annotation, field_info.is_required())
     nested_model = _extract_model(base_annotation)
     enum_values = _extract_enum_values(base_annotation)
@@ -58,6 +60,8 @@ def _build_field_card(name: str, annotation: Any, field_info: Any, path: str) ->
 
 
 def _unwrap_optional(annotation: Any, required: bool) -> tuple[Any, bool]:
+    """Unwrap optional annotations and derive the required flag."""
+
     origin = get_origin(annotation)
     if origin in (UnionType, getattr(__import__("typing"), "Union")):
         args = [arg for arg in get_args(annotation) if arg is not NoneType]
@@ -67,6 +71,8 @@ def _unwrap_optional(annotation: Any, required: bool) -> tuple[Any, bool]:
 
 
 def _extract_model(annotation: Any) -> type[BaseModel] | None:
+    """Return the nested Pydantic model type for an annotation, if any."""
+
     origin = get_origin(annotation)
     if origin in (list, tuple, set):
         args = get_args(annotation)
@@ -77,6 +83,8 @@ def _extract_model(annotation: Any) -> type[BaseModel] | None:
 
 
 def _extract_enum_values(annotation: Any) -> list[str]:
+    """Extract literal or enum values from an annotation."""
+
     origin = get_origin(annotation)
     if origin is Literal:
         return sorted(str(value) for value in get_args(annotation))
@@ -86,6 +94,8 @@ def _extract_enum_values(annotation: Any) -> list[str]:
 
 
 def _render_type_label(annotation: Any) -> str:
+    """Render a compact string label for a field annotation."""
+
     origin = get_origin(annotation)
     if origin is Literal:
         return "literal"
@@ -104,6 +114,8 @@ def _render_type_label(annotation: Any) -> str:
 
 
 def _stringify_default(default: Any) -> Any:
+    """Normalize default values for inclusion in a schema card."""
+
     if default is None:
         return None
     if isinstance(default, (str, int, float, bool)):
@@ -112,6 +124,8 @@ def _stringify_default(default: Any) -> Any:
 
 
 def _clean_docstring(value: str | None) -> str | None:
+    """Normalize a docstring into a stripped summary string."""
+
     if value is None:
         return None
     cleaned = value.strip()

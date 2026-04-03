@@ -88,6 +88,8 @@ class _FieldCluster:
 
 
 def _pick_counter_value(counter: Counter[str | None]) -> str:
+    """Select the most frequent counter value with deterministic tie-breaking."""
+
     ranked = sorted(counter.items(), key=lambda item: (-item[1], str(item[0])))
     value = ranked[0][0]
     if value is None:

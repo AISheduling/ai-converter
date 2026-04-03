@@ -20,6 +20,8 @@ SCHEMA_FIXTURES = ROOT / "tests" / "fixtures" / "schema"
 
 
 def test_target_card_builder_exports_nested_pydantic_models() -> None:
+    """Verify that nested Pydantic models are exported recursively."""
+
     module = _load_dsl_schema_module()
 
     card = build_target_schema_card(module.SchedulingProblem)
@@ -35,6 +37,8 @@ def test_target_card_builder_exports_nested_pydantic_models() -> None:
 
 
 def test_target_card_builder_preserves_required_optional_flags() -> None:
+    """Verify that required and optional target fields are preserved."""
+
     module = _load_dsl_schema_module()
 
     card = build_target_schema_card(module.SchedulingProblem)
@@ -48,6 +52,8 @@ def test_target_card_builder_preserves_required_optional_flags() -> None:
 
 
 def test_target_card_builder_extracts_descriptions_and_enums() -> None:
+    """Verify that field descriptions and enum values are exported."""
+
     module = _load_dsl_schema_module()
 
     card = build_target_schema_card(module.SchedulingProblem)
@@ -59,6 +65,8 @@ def test_target_card_builder_extracts_descriptions_and_enums() -> None:
 
 
 def test_evidence_packer_respects_budget() -> None:
+    """Verify that evidence packing stays within the requested budget."""
+
     report = build_profile_report(PROFILE_FIXTURES / "projects.json", sample_limit=4)
 
     packed = pack_profile_evidence(report, budget=700, mode="compact")
@@ -69,6 +77,8 @@ def test_evidence_packer_respects_budget() -> None:
 
 
 def test_evidence_packer_keeps_high_value_paths() -> None:
+    """Verify that evidence packing keeps structurally valuable paths."""
+
     report = build_profile_report(PROFILE_FIXTURES / "projects.json", sample_limit=4)
 
     packed = pack_profile_evidence(report, budget=1400, mode="balanced")
@@ -80,6 +90,8 @@ def test_evidence_packer_keeps_high_value_paths() -> None:
 
 
 def test_source_spec_aggregator_merges_aliases_and_confidence() -> None:
+    """Verify that candidate aggregation merges aliases and confidence."""
+
     candidates = [SourceSchemaSpec.model_validate(item) for item in json.loads((SCHEMA_FIXTURES / "source_candidates.json").read_text(encoding="utf-8"))]
 
     merged = merge_source_schema_candidates(candidates)
@@ -93,6 +105,8 @@ def test_source_spec_aggregator_merges_aliases_and_confidence() -> None:
 
 
 def test_source_spec_normalizer_is_deterministic() -> None:
+    """Verify that source-spec normalization is input-order independent."""
+
     first = SourceSchemaSpec(
         source_name="candidate",
         source_format="json",
@@ -127,6 +141,8 @@ def test_source_spec_normalizer_is_deterministic() -> None:
 
 
 def _load_dsl_schema_module():
+    """Load the external DSL schema module directly from disk for tests."""
+
     module_path = ROOT / "dsl-core" / "dsl_schema.py"
     spec = importlib.util.spec_from_file_location("task02_dsl_schema", module_path)
     if spec is None or spec.loader is None:
@@ -137,6 +153,8 @@ def _load_dsl_schema_module():
 
 
 def _collect_paths(fields: list[dict]) -> list[str]:
+    """Collect flattened target-card paths from nested field dictionaries."""
+
     result: list[str] = []
     for field in fields:
         result.append(field["path"])
@@ -145,10 +163,14 @@ def _collect_paths(fields: list[dict]) -> list[str]:
 
 
 def _field_map(fields: list[dict]) -> dict[str, dict]:
+    """Map flattened target-card field dictionaries by path."""
+
     return {path: field for field in fields for path, field in _flatten_field(field)}
 
 
 def _flatten_field(field: dict) -> list[tuple[str, dict]]:
+    """Flatten one nested target-card field tree into path-field pairs."""
+
     pairs = [(field["path"], field)]
     for child in field["children"]:
         pairs.extend(_flatten_field(child))

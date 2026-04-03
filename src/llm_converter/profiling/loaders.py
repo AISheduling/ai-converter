@@ -55,6 +55,8 @@ def load_dataset(path: str | Path) -> LoadedDataset:
 
 
 def _load_csv(path: Path) -> LoadedDataset:
+    """Load a CSV file into normalized row dictionaries."""
+
     with path.open("r", encoding="utf-8", newline="") as handle:
         sample = handle.read(2048)
         handle.seek(0)
@@ -90,6 +92,8 @@ def _load_csv(path: Path) -> LoadedDataset:
 
 
 def _load_json(path: Path) -> LoadedDataset:
+    """Load a JSON file into normalized records and root metadata."""
+
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
 
@@ -105,6 +109,8 @@ def _load_json(path: Path) -> LoadedDataset:
 
 
 def _load_jsonl(path: Path) -> LoadedDataset:
+    """Load a JSONL file into normalized row dictionaries."""
+
     records: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
         for line in handle:
@@ -126,6 +132,8 @@ def _load_jsonl(path: Path) -> LoadedDataset:
 
 
 def _records_from_json_payload(payload: Any) -> tuple[list[dict[str, Any]], str]:
+    """Normalize a JSON payload into records plus a root-type label."""
+
     if isinstance(payload, dict):
         return [payload], "object"
     if isinstance(payload, list):

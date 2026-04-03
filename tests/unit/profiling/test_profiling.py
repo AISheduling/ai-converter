@@ -16,16 +16,22 @@ FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "profiling"
 
 
 def _field_map(report):
+    """Map field-profile entries by normalized path."""
+
     return {field.path: field for field in report.field_profiles}
 
 
 def _report_without_path(report):
+    """Return a serialized report with the source path removed."""
+
     payload = report.model_dump()
     payload["source"]["path"] = None
     return payload
 
 
 def test_csv_profile_detects_columns_and_types() -> None:
+    """Verify that CSV profiling captures normalized columns and type hints."""
+
     report = profile_csv(FIXTURES / "people.csv")
 
     fields = _field_map(report)
@@ -39,6 +45,8 @@ def test_csv_profile_detects_columns_and_types() -> None:
 
 
 def test_json_profile_flattens_nested_paths() -> None:
+    """Verify that nested JSON objects and arrays are flattened into paths."""
+
     report = profile_json(FIXTURES / "projects.json")
 
     fields = _field_map(report)
@@ -51,6 +59,8 @@ def test_json_profile_flattens_nested_paths() -> None:
 
 
 def test_profile_is_stable_under_row_reordering() -> None:
+    """Verify that row reordering does not change the normalized profile."""
+
     original = json.loads((FIXTURES / "projects.json").read_text(encoding="utf-8"))
     reordered = list(reversed(original))
 
@@ -62,6 +72,8 @@ def test_profile_is_stable_under_row_reordering() -> None:
 
 
 def test_sampling_is_deterministic() -> None:
+    """Verify that representative sampling is deterministic for fixed inputs."""
+
     candidates = [
         SamplingCandidate(
             record_id=f"record_{index}",
@@ -86,6 +98,8 @@ def test_sampling_is_deterministic() -> None:
 
 
 def test_sampling_prefers_records_with_new_coverage() -> None:
+    """Verify that sampling favors records that expand path coverage."""
+
     candidates = [
         SamplingCandidate(
             record_id="plain",
@@ -118,6 +132,8 @@ def test_sampling_prefers_records_with_new_coverage() -> None:
 
 
 def test_fingerprint_changes_on_structural_change() -> None:
+    """Verify that structural schema changes produce a new fingerprint."""
+
     base_records = [{"id": "1", "name": "alpha"}, {"id": "2", "name": "beta"}]
     changed_records = [{"id": "1", "name": "alpha", "status": "active"}, {"id": "2", "name": "beta"}]
 
@@ -128,6 +144,8 @@ def test_fingerprint_changes_on_structural_change() -> None:
 
 
 def test_fingerprint_does_not_change_on_value_order_change() -> None:
+    """Verify that record ordering alone does not change the fingerprint."""
+
     first_records = [{"id": "1", "name": "alpha"}, {"id": "2", "name": "beta"}]
     second_records = list(reversed(first_records))
 

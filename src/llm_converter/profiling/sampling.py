@@ -44,6 +44,8 @@ def _select_from_flattened(
     raw_records: list[dict[str, Any]],
     limit: int,
 ) -> list[SampleRecord]:
+    """Select representative samples from flattened records."""
+
     limit = max(0, min(limit, len(raw_records)))
     if limit == 0:
         return []
@@ -93,6 +95,8 @@ def _select_from_flattened(
 
 
 def _select_from_candidates(candidates: list[SamplingCandidate], limit: int) -> list[SamplingCandidate]:
+    """Select representative candidates from precomputed sampling inputs."""
+
     effective_limit = max(0, min(limit, len(candidates)))
     selected: list[SamplingCandidate] = []
     covered_paths: set[str] = set()
@@ -126,6 +130,8 @@ def _score_record(
     path_counts: Counter[str],
     typed_path_counts: Counter[tuple[str, str]],
 ) -> tuple[float, list[str]]:
+    """Score a flattened record by coverage, completeness, and rarity."""
+
     record_paths = sorted(flattened)
     new_paths = [path for path in record_paths if path not in covered_paths]
     new_path_coverage = float(len(new_paths))
@@ -144,6 +150,8 @@ def _score_record(
 
 
 def _type_name(value: Any) -> str:
+    """Return the normalized sampling type label for a Python value."""
+
     if value is None:
         return "null"
     if isinstance(value, bool):

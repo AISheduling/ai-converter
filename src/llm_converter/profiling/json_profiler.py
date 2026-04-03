@@ -23,6 +23,8 @@ def profile_json(path: str | Path):
 
 
 def _walk_value(value: Any, prefix: str, out: dict[str, list[Any]]) -> None:
+    """Recursively flatten nested JSON values into path observations."""
+
     if isinstance(value, dict):
         for key, nested in value.items():
             next_prefix = f"{prefix}.{key}" if prefix else key

@@ -41,6 +41,8 @@ def build_profile_report(path_or_input: str | Path | LoadedInput, *, sample_limi
 
 
 def _ensure_loaded_dataset(path_or_input: str | Path | LoadedInput) -> LoadedDataset:
+    """Convert file paths or in-memory inputs into a sorted loaded dataset."""
+
     if isinstance(path_or_input, LoadedInput):
         return LoadedDataset(
             source_name="in-memory" if path_or_input.path else "in-memory",
@@ -56,6 +58,8 @@ def _ensure_loaded_dataset(path_or_input: str | Path | LoadedInput) -> LoadedDat
 
 
 def _flatten_records(dataset: LoadedDataset) -> list[dict[str, list[Any]]]:
+    """Flatten normalized records according to the source format."""
+
     if dataset.source_format == "csv":
         return [flatten_csv_record(record) for record in dataset.records]
     return [flatten_json_record(record) for record in dataset.records]
@@ -65,6 +69,8 @@ def _build_field_profiles(
     dataset: LoadedDataset,
     flattened_records: list[dict[str, list[Any]]],
 ) -> list[FieldProfile]:
+    """Build deterministic field-profile statistics from flattened records."""
+
     all_paths = sorted({path for record in flattened_records for path in record})
     profiles: list[FieldProfile] = []
     total_records = max(1, len(flattened_records))
@@ -128,12 +134,16 @@ def _build_field_profiles(
 
 
 def _range_summary(values: list[float]) -> ScalarSummary | None:
+    """Build a scalar summary for a non-empty list of numeric values."""
+
     if not values:
         return None
     return ScalarSummary(min=min(values), max=max(values))
 
 
 def _top_values(counter: Counter[str]) -> list[ValueCount]:
+    """Return the most frequent scalar values in deterministic order."""
+
     return [
         ValueCount(value=value, count=count)
         for value, count in sorted(counter.items(), key=lambda item: (-item[1], item[0]))[:5]
@@ -141,6 +151,8 @@ def _top_values(counter: Counter[str]) -> list[ValueCount]:
 
 
 def _type_name(value: Any) -> str:
+    """Return the normalized profiling type label for a Python value."""
+
     if value is None:
         return "null"
     if isinstance(value, bool):
@@ -157,6 +169,8 @@ def _type_name(value: Any) -> str:
 
 
 def _stable_repr(value: Any) -> str:
+    """Serialize a value into a deterministic string representation."""
+
     if isinstance(value, (dict, list)):
         import json
 
@@ -165,6 +179,8 @@ def _stable_repr(value: Any) -> str:
 
 
 def _max_array_length(path: str, flattened_records: list[dict[str, list[Any]]]) -> int | None:
+    """Return the maximum observed array length for an array-item path."""
+
     if not path.endswith("[]"):
         return None
     parent_path = path[:-2]
