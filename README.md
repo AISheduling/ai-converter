@@ -1,71 +1,104 @@
 # ai-converter
 
-Deterministic tooling for converting free-form `L0` schedule descriptions into a fixed `L1` DSL in later tasks.
+`ai-converter` is a deterministic Python library for preparing free-form `L0` schedule data for later conversion into a fixed `L1` DSL.
 
-## TASK-01 Profiling
+At the current stage the library gives you two main building blocks:
 
-`TASK-01` adds a profiling layer under `src/llm_converter/profiling/` that reads `CSV`, `JSON`, and `JSONL` inputs and produces a normalized `ProfileReport`.
+- profiling raw `CSV`, `JSON`, and `JSONL` inputs into a stable `ProfileReport`
+- building schema contracts and compact evidence bundles on top of that profile
 
-The profiling flow is:
+Test-running instructions live in [tests/README.md](tests/README.md).
 
-1. Load raw input through `loaders.py`.
-2. Flatten records into path-based observations such as `owner.name` or `tasks[].id`.
-3. Aggregate field statistics and select deterministic representative samples.
-4. Compute a stable schema fingerprint that ignores row ordering but changes on structural changes.
+## Installation
 
-Relevant fixtures and tests live in:
+The package requires Python `>=3.11`.
 
-- `tests/fixtures/profiling/`
-- `tests/unit/profiling/`
-
-Run the focused test suite with:
+Install it in editable mode from the repository root:
 
 ```bash
-python -m pytest tests/unit/profiling -q -p no:cacheprovider
+python -m pip install -e .
 ```
 
-This repository is building an offline `L0 -> L1` converter pipeline. `TASK-01` adds the first deterministic layer: profiling raw `CSV`, `JSON`, and `JSONL` inputs into a canonical `ProfileReport`.
+## Use The Profiling API
 
-## Profiling package
+The profiling layer lives in `src/llm_converter/profiling/` and exposes a simple entry point through `llm_converter.profiling`.
 
-The profiling implementation lives under `src/llm_converter/profiling/` and currently covers:
+```python
+from llm_converter.profiling import build_profile_report
 
-- input loading for `CSV`, `JSON`, and `JSONL`
-- path and field statistics
-- deterministic representative sampling
-- stable schema fingerprinting
+report = build_profile_report("tests/fixtures/profiling/projects.json")
 
-`dsl-core/` remains an external reference for the target DSL and is not modified by this task.
-
-## Local test command
-
-Run the focused profiling checks with:
-
-```bash
-pytest tests/unit/profiling -q
+print(report.schema_fingerprint)
+print(report.record_count)
+print(report.field_profiles[0].path)
 ```
 
-Fixture inputs for the profiling layer live in `tests/fixtures/profiling/`, and a short design note lives in `docs/architecture/profiling.md`.
+What you get back:
 
-## TASK-02 Schema Contracts
+- normalized source metadata
+- path-based field statistics
+- deterministic representative samples
+- a stable schema fingerprint that ignores row reordering
 
-`TASK-02` adds a schema-first package under `src/llm_converter/schema/`:
+## Use The Schema API
 
-- `SourceSchemaSpec` models and deterministic normalization/aggregation helpers
-- `TargetSchemaCard` export from nested Pydantic L1 models
-- budgeted evidence packing from `ProfileReport`
+The schema contract layer lives in `src/llm_converter/schema/`.
 
-The fixed L1 contract still lives in read-only form under `dsl-core/`.
+It helps you:
 
-Relevant paths:
+- describe source-side structure with `SourceSchemaSpec`
+- normalize and merge schema candidates deterministically
+- export Pydantic target models into compact `TargetSchemaCard` objects
+- compress a `ProfileReport` into a budgeted evidence bundle for later LLM stages
 
-- `src/llm_converter/schema/`
-- `tests/unit/schema/`
-- `tests/fixtures/schema/`
-- `docs/architecture/schema_contracts.md`
+### Example: pack evidence from a profile
 
-Run the focused schema checks with:
+```python
+from llm_converter.profiling import build_profile_report
+from llm_converter.schema import pack_profile_evidence
 
-```bash
-python -m pytest tests/unit/schema -q -p no:cacheprovider
+report = build_profile_report("tests/fixtures/profiling/projects.json")
+bundle = pack_profile_evidence(
+    report,
+    budget=1400,
+    mode="balanced",
+    format_hint="project schedule data",
+)
+
+print(bundle.summary.field_count)
+print(bundle.estimated_size)
+print(bundle.truncated)
 ```
+
+### Example: build a target schema card from a Pydantic model
+
+```python
+from pydantic import BaseModel, Field
+
+from llm_converter.schema import build_target_schema_card
+
+
+class DemoTask(BaseModel):
+    id: str = Field(description="Task identifier")
+    duration_days: int | None = Field(default=None, description="Planned duration")
+
+
+card = build_target_schema_card(DemoTask)
+
+print(card.model_name)
+print(card.fields[0].path)
+print(card.fields[0].description)
+```
+
+## Package Layout
+
+- `src/llm_converter/profiling/` contains the deterministic profiling layer
+- `src/llm_converter/schema/` contains schema contracts and evidence packing
+- `docs/architecture/profiling.md` documents the profiling design
+- `docs/architecture/schema_contracts.md` documents the schema contract layer
+
+## Project Notes
+
+- `dsl-core/` is treated as an external, read-only reference for the fixed `L1` DSL.
+- The current library scope is deterministic preparation and schema-contract work; live LLM calls are intentionally out of scope here.
+- If you need commands for running the test suites, fixtures, or focused verification flows, use [tests/README.md](tests/README.md).
