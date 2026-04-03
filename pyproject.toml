@@ -1,0 +1,24 @@
+[project]
+name = "ai-converter"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "angrymuskrat",email = "mlhakov2011@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.12.5,<3.0.0",
+]
+
+[project.scripts]
+ai-converter = "ai_converter.cli:main"
+
+[tool.poetry]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0.2"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
