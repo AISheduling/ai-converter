@@ -36,11 +36,12 @@ Installed workflow agents:
 ## TASK-03 Notes
 
 - LLM adapter code lives under `src/llm_converter/llm/`.
+- Concrete OpenAI adapter lives in `src/llm_converter/llm/openai_adapter.py`.
 - Mapping IR code lives under `src/llm_converter/mapping_ir/`.
 - Versioned prompt templates live under `prompts/source_schema/`, `prompts/mapping_ir/`, and `prompts/repair/`.
 - Focused mapping-ir tests live under `tests/unit/mapping_ir/`.
 - Preferred verification command for TASK-03 is `python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider`.
-- Use fake adapters in unit tests; do not call live models or the network.
+- Use fake or injected adapters in unit tests; do not call live models or the network.
 
 ## Project Notes
 

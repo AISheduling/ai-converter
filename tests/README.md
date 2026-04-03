@@ -4,7 +4,7 @@ This file contains the repository's test-running instructions.
 
 Run all commands from the repository root:
 
-`C:\Users\muskrat\workspace\ai-converter`
+`ai-converter`
 
 ## General Rules
 
@@ -13,11 +13,6 @@ Run all commands from the repository root:
 - Use `-p no:cacheprovider` for the focused suites used in this repository.
 - Tests must run without network access and without live LLM calls.
 
-If you want to use the exact project interpreter that was used for the focused verification runs, it is:
-
-```text
-C:\Users\muskrat\AppData\Local\pypoetry\Cache\virtualenvs\ai-converter-BoqDNqnM-py3.11\Scripts\python.exe
-```
 
 ## Focused Test Suites
 
@@ -62,6 +57,7 @@ Fixtures:
 Tests:
 
 - `tests/unit/mapping_ir/`
+- includes offline checks for `FakeLLMAdapter` and `OpenAILLMAdapter` via injected fake client objects
 
 Command:
 
@@ -82,19 +78,19 @@ python -m pytest tests/unit/profiling tests/unit/schema tests/unit/mapping_ir -q
 ### Schema only
 
 ```bash
-C:\Users\mlhak\AppData\Local\pypoetry\Cache\virtualenvs\ai-converter-b-GWvKUj-py3.12\Scripts\python.exe -m pytest tests/unit/schema -q -p no:cacheprovider
+python -m pytest tests/unit/schema -q -p no:cacheprovider
 ```
 
 ### Profiling and schema together
 
 ```bash
-C:\Users\muskrat\AppData\Local\pypoetry\Cache\virtualenvs\ai-converter-BoqDNqnM-py3.11\Scripts\python.exe -m pytest tests/unit/profiling tests/unit/schema -q -p no:cacheprovider
+python -m pytest tests/unit/profiling tests/unit/schema -q -p no:cacheprovider
 ```
 
 ### Mapping ir only
 
 ```bash
-C:\Users\muskrat\AppData\Local\pypoetry\Cache\virtualenvs\ai-converter-BoqDNqnM-py3.11\Scripts\python.exe -m pytest tests/unit/mapping_ir -q -p no:cacheprovider
+python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider
 ```
 
 ## Test Layout

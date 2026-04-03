@@ -1,6 +1,7 @@
 """Public exports for offline LLM adapter contracts and prompt rendering."""
 
 from .fake_client import FakeLLMAdapter, FakeLLMCall, FakeLLMReply
+from .openai_adapter import OpenAILLMAdapter
 from .prompt_renderers import (
     PromptTemplateBundle,
     load_prompt_bundle,
@@ -25,6 +26,7 @@ __all__ = [
     "LLMError",
     "LLMResponse",
     "LLMUsage",
+    "OpenAILLMAdapter",
     "PromptEnvelope",
     "PromptTemplateBundle",
     "PromptTemplateReference",

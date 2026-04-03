@@ -101,6 +101,7 @@ It helps you:
 - validate `MappingIR` candidates before any runtime compilation exists
 - rank multiple fake-backed candidates by structural validity and target coverage
 - build bounded repair prompts from failing fixtures
+- switch between `FakeLLMAdapter` for offline tests and `OpenAILLMAdapter` for real OpenAI-backed calls
 
 ### Example: rank fake-backed mapping candidates
 
@@ -162,6 +163,19 @@ result = MappingSynthesizer(adapter).synthesize_mapping(
 print(result.best_index)
 print(result.best_candidate.assignments[0].target_path)
 ```
+
+### Example: create a real OpenAI-backed adapter
+
+```python
+from llm_converter.llm import OpenAILLMAdapter
+
+adapter = OpenAILLMAdapter(
+    model="gpt-5.4-mini",
+    api_key="YOUR_OPENAI_API_KEY",
+)
+```
+
+The OpenAI adapter uses the Responses API under the hood and keeps imports lazy, so offline tests can still run without network access by using injected fake clients.
 
 ## Package Layout
 
