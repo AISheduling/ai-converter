@@ -17,9 +17,6 @@ Hard rules:
 - Do not claim completion unless every acceptance criterion is `PASS`.
 - Verifiers judge current code and current command results, not prior chat claims.
 - Fixers should make the smallest defensible diff.
-- For broad Codex tasks, bounded fan-out is allowed only after `init`, only when the user has explicitly asked for delegation or parallel agent work, and only when task shape warrants it: use bounded `explorer` children before or after spec freeze, use bounded `worker` children only after the spec is frozen, keep the task tree shallow, keep evidence ownership with one builder, and keep verdict ownership with one fresh verifier.
-- This root `AGENTS.md` block is the repo-wide Codex baseline. More-specific nested `AGENTS.override.md` or `AGENTS.md` files still take precedence for their directory trees.
-- Keep this block lean. If the workflow needs more Codex guidance, prefer nested `AGENTS.md` / `AGENTS.override.md` files or configured fallback guide docs instead of expanding this root block indefinitely.
 
 Installed workflow agents:
 - `.codex/agents/task-spec-freezer.toml`
@@ -36,6 +33,15 @@ Installed workflow agents:
 - Preferred verification command for TASK-01 is `python -m pytest tests/unit/profiling -q -p no:cacheprovider`.
 - Treat `dsl-core/` as an external L1 reference library during TASK-01; do not modify it while changing the profiling layer.
 
+## TASK-03 Notes
+
+- LLM adapter code lives under `src/llm_converter/llm/`.
+- Mapping IR code lives under `src/llm_converter/mapping_ir/`.
+- Versioned prompt templates live under `prompts/source_schema/`, `prompts/mapping_ir/`, and `prompts/repair/`.
+- Focused mapping-ir tests live under `tests/unit/mapping_ir/`.
+- Preferred verification command for TASK-03 is `python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider`.
+- Use fake adapters in unit tests; do not call live models or the network.
+
 ## Project Notes
 
 - `TASK-01` creates the initial profiling layer under `src/llm_converter/profiling/`.
@@ -45,4 +51,7 @@ Installed workflow agents:
 - `TASK-02` adds schema contracts under `src/llm_converter/schema/`.
 - Schema fixtures live under `tests/fixtures/schema/`.
 - Focused schema tests run with `python -m pytest tests/unit/schema -q -p no:cacheprovider`.
+- `TASK-03` adds the offline LLM adapter layer and MappingIR contracts under `src/llm_converter/llm/` and `src/llm_converter/mapping_ir/`.
+- Prompt templates for `TASK-03` live under `prompts/`.
+- Focused mapping-ir tests run with `python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider`.
 - Do not modify `dsl-core/` while building `TargetSchemaCard`; use it only as the external L1 reference surface.

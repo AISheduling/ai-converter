@@ -1,0 +1,10 @@
+SOURCE SCHEMA SYNTHESIS
+
+Format hint:
+${format_hint}
+
+Evidence bundle:
+${evidence_json}
+
+Required output schema:
+${output_schema_json}

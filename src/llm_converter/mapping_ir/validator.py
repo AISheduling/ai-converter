@@ -1,0 +1,435 @@
+"""Validation helpers for deterministic MappingIR programs."""
+
+from __future__ import annotations
+
+import re
+from collections import defaultdict
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from llm_converter.schema import SourceSchemaSpec, TargetFieldCard, TargetSchemaCard
+
+from .models import MappingIR, MappingStep, StepOperation
+
+_TARGET_PATH_PATTERN = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$")
+
+
+class ValidationIssue(BaseModel):
+    """Machine-readable validation issue for one MappingIR program.
+
+    Attributes:
+        code: Stable machine-readable issue code.
+        message: Human-readable diagnostic message.
+        location: Program location associated with the issue.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    message: str
+    location: str
+
+
+class ValidationResult(BaseModel):
+    """Validation verdict for one MappingIR candidate.
+
+    Attributes:
+        valid: Whether the program passed all validation checks.
+        issues: Structured validation issues found during validation.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    valid: bool
+    issues: list[ValidationIssue] = Field(default_factory=list)
+
+
+class MappingIRValidator:
+    """Validate MappingIR structure, references, targets, and dependencies."""
+
+    def validate(
+        self,
+        program: MappingIR,
+        *,
+        source_schema: SourceSchemaSpec | None = None,
+        target_schema: TargetSchemaCard | None = None,
+    ) -> ValidationResult:
+        """Validate a mapping program against optional source and target contracts.
+
+        Args:
+            program: Mapping program to validate.
+            source_schema: Optional canonical source schema contract.
+            target_schema: Optional canonical target schema card.
+
+        Returns:
+            Structured validation verdict for the mapping program.
+        """
+
+        issues: list[ValidationIssue] = []
+        source_ids = {ref.id for ref in program.source_refs}
+        step_ids = [step.id for step in program.steps]
+        step_id_set = set(step_ids)
+
+        if len(step_ids) != len(step_id_set):
+            issues.append(
+                ValidationIssue(
+                    code="duplicate_step_id",
+                    message="mapping steps must have unique ids",
+                    location="steps",
+                )
+            )
+
+        if source_schema is not None:
+            allowed_paths = {field.path for field in source_schema.fields}
+            for ref in program.source_refs:
+                if ref.path not in allowed_paths:
+                    issues.append(
+                        ValidationIssue(
+                            code="unknown_source_path",
+                            message=f"source path '{ref.path}' is not present in the source schema",
+                            location=f"source_refs.{ref.id}",
+                        )
+                    )
+
+        for step in program.steps:
+            issues.extend(self._validate_step(step, source_ids=source_ids, step_ids=step_id_set))
+
+        for assignment in program.assignments:
+            if assignment.step_id not in step_id_set:
+                issues.append(
+                    ValidationIssue(
+                        code="unknown_step_ref",
+                        message=f"assignment references unknown step '{assignment.step_id}'",
+                        location=f"assignments.{assignment.target_path}",
+                    )
+                )
+            if target_schema is not None and assignment.target_path not in flatten_target_paths(target_schema):
+                issues.append(
+                    ValidationIssue(
+                        code="unknown_target_path",
+                        message=f"target path '{assignment.target_path}' is not part of the target schema",
+                        location=f"assignments.{assignment.target_path}",
+                    )
+                )
+            elif target_schema is None and not _TARGET_PATH_PATTERN.match(assignment.target_path):
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_target_path",
+                        message=f"target path '{assignment.target_path}' is not a valid dotted path",
+                        location=f"assignments.{assignment.target_path}",
+                    )
+                )
+
+        issues.extend(self._validate_assignment_conflicts(program))
+        issues.extend(self._validate_conditions(program, source_ids=source_ids, step_ids=step_id_set))
+        issues.extend(self._validate_cycles(program))
+
+        return ValidationResult(valid=not issues, issues=issues)
+
+    def _validate_step(
+        self,
+        step: MappingStep,
+        *,
+        source_ids: set[str],
+        step_ids: set[str],
+    ) -> list[ValidationIssue]:
+        """Validate one mapping step.
+
+        Args:
+            step: Mapping step to validate.
+            source_ids: Known source reference ids from the program.
+            step_ids: Known step ids from the program.
+
+        Returns:
+            Structured validation issues for the step.
+        """
+
+        issues = self._validate_operation_arguments(step.operation, location=f"steps.{step.id}")
+
+        for source_ref in self._source_refs_for_operation(step.operation):
+            if source_ref not in source_ids:
+                issues.append(
+                    ValidationIssue(
+                        code="unknown_source_ref",
+                        message=f"unknown source ref '{source_ref}'",
+                        location=f"steps.{step.id}",
+                    )
+                )
+
+        for upstream_step in sorted(set(step.depends_on + step.operation.step_refs)):
+            if upstream_step == step.id:
+                issues.append(
+                    ValidationIssue(
+                        code="cyclic_dependency",
+                        message=f"step '{step.id}' cannot depend on itself",
+                        location=f"steps.{step.id}",
+                    )
+                )
+            elif upstream_step not in step_ids:
+                issues.append(
+                    ValidationIssue(
+                        code="unknown_step_ref",
+                        message=f"unknown upstream step '{upstream_step}'",
+                        location=f"steps.{step.id}",
+                    )
+                )
+
+        return issues
+
+    def _validate_operation_arguments(
+        self,
+        operation: StepOperation,
+        *,
+        location: str,
+    ) -> list[ValidationIssue]:
+        """Validate operation-specific arguments for one step.
+
+        Args:
+            operation: Step operation payload to validate.
+            location: Human-readable program location for diagnostics.
+
+        Returns:
+            Structured issues found in the operation arguments.
+        """
+
+        issues: list[ValidationIssue] = []
+        single_source_ops = {"copy", "rename", "cast", "map_enum", "unit_convert", "split", "unnest", "validate"}
+        if operation.kind in single_source_ops and not operation.source_ref:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_arguments",
+                    message=f"operation '{operation.kind}' requires source_ref",
+                    location=location,
+                )
+            )
+        if operation.kind == "merge" and not operation.source_refs:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_arguments",
+                    message="operation 'merge' requires source_refs",
+                    location=location,
+                )
+            )
+        if operation.kind == "nest" and not operation.step_refs:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_arguments",
+                    message="operation 'nest' requires step_refs",
+                    location=location,
+                )
+            )
+        if operation.kind == "cast" and not operation.to_type:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_arguments",
+                    message="operation 'cast' requires to_type",
+                    location=location,
+                )
+            )
+        if operation.kind == "map_enum" and not operation.mapping:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_arguments",
+                    message="operation 'map_enum' requires a non-empty mapping",
+                    location=location,
+                )
+            )
+        if operation.kind == "unit_convert":
+            if operation.factor is None or operation.factor <= 0:
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_arguments",
+                        message="operation 'unit_convert' requires a positive factor",
+                        location=location,
+                    )
+                )
+            if not operation.from_unit or not operation.to_unit:
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_arguments",
+                        message="operation 'unit_convert' requires from_unit and to_unit",
+                        location=location,
+                    )
+                )
+        if operation.kind == "split" and not operation.delimiter:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_arguments",
+                    message="operation 'split' requires delimiter",
+                    location=location,
+                )
+            )
+        if operation.kind == "derive" and not operation.expression:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_arguments",
+                    message="operation 'derive' requires expression",
+                    location=location,
+                )
+            )
+        if operation.kind == "validate" and not operation.predicate:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_arguments",
+                    message="operation 'validate' requires predicate",
+                    location=location,
+                )
+            )
+        if operation.kind == "unnest" and not operation.child_path:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_arguments",
+                    message="operation 'unnest' requires child_path",
+                    location=location,
+                )
+            )
+        return issues
+
+    def _validate_assignment_conflicts(self, program: MappingIR) -> list[ValidationIssue]:
+        """Validate conflicting writes across target assignments.
+
+        Args:
+            program: Mapping program to inspect.
+
+        Returns:
+            Structured conflict issues for duplicate target writes.
+        """
+
+        writes: dict[str, list[str]] = defaultdict(list)
+        overwrite_flags: dict[str, list[bool]] = defaultdict(list)
+        for assignment in program.assignments:
+            writes[assignment.target_path].append(assignment.step_id)
+            overwrite_flags[assignment.target_path].append(assignment.allow_overwrite)
+
+        issues: list[ValidationIssue] = []
+        for target_path, step_ids in writes.items():
+            if len(step_ids) > 1 and not all(overwrite_flags[target_path]):
+                issues.append(
+                    ValidationIssue(
+                        code="conflicting_target_write",
+                        message=f"multiple steps write to '{target_path}': {', '.join(step_ids)}",
+                        location=f"assignments.{target_path}",
+                    )
+                )
+        return issues
+
+    def _validate_conditions(
+        self,
+        program: MappingIR,
+        *,
+        source_ids: set[str],
+        step_ids: set[str],
+    ) -> list[ValidationIssue]:
+        """Validate preconditions and postconditions.
+
+        Args:
+            program: Mapping program to inspect.
+            source_ids: Known source reference ids from the program.
+            step_ids: Known step ids from the program.
+
+        Returns:
+            Structured issues for invalid condition references.
+        """
+
+        issues: list[ValidationIssue] = []
+        for group_name, conditions in (
+            ("preconditions", program.preconditions),
+            ("postconditions", program.postconditions),
+        ):
+            for condition in conditions:
+                if condition.ref not in source_ids and condition.ref not in step_ids:
+                    issues.append(
+                        ValidationIssue(
+                            code="unknown_reference",
+                            message=f"condition references unknown id '{condition.ref}'",
+                            location=f"{group_name}.{condition.ref}",
+                        )
+                    )
+        return issues
+
+    def _validate_cycles(self, program: MappingIR) -> list[ValidationIssue]:
+        """Validate that step dependencies are acyclic.
+
+        Args:
+            program: Mapping program to inspect.
+
+        Returns:
+            Structured cycle issues found in the dependency graph.
+        """
+
+        dependencies = {
+            step.id: sorted(set(step.depends_on + step.operation.step_refs))
+            for step in program.steps
+        }
+        visiting: set[str] = set()
+        visited: set[str] = set()
+        issues: list[ValidationIssue] = []
+
+        def visit(node: str) -> None:
+            if node in visited or node in visiting:
+                return
+            visiting.add(node)
+            for neighbor in dependencies.get(node, []):
+                if neighbor in visiting:
+                    issues.append(
+                        ValidationIssue(
+                            code="cyclic_dependency",
+                            message=f"dependency cycle detected between '{node}' and '{neighbor}'",
+                            location=f"steps.{node}",
+                        )
+                    )
+                    continue
+                visit(neighbor)
+            visiting.remove(node)
+            visited.add(node)
+
+        for node in dependencies:
+            visit(node)
+        return issues
+
+    def _source_refs_for_operation(self, operation: StepOperation) -> list[str]:
+        """Collect source reference ids used by one operation.
+
+        Args:
+            operation: Step operation payload to inspect.
+
+        Returns:
+            Ordered list of source reference ids used by the operation.
+        """
+
+        refs = list(operation.source_refs)
+        if operation.source_ref:
+            refs.insert(0, operation.source_ref)
+        return refs
+
+
+def flatten_target_paths(target_schema: TargetSchemaCard) -> set[str]:
+    """Flatten target-card fields into a canonical target-path set.
+
+    Args:
+        target_schema: Target schema card to flatten.
+
+    Returns:
+        Set of canonical dotted target paths.
+    """
+
+    paths: set[str] = set()
+    for field in target_schema.fields:
+        paths.update(_flatten_field_paths(field))
+    return paths
+
+
+def _flatten_field_paths(field: TargetFieldCard) -> set[str]:
+    """Flatten one target-card subtree into canonical paths.
+
+    Args:
+        field: Target field card to flatten.
+
+    Returns:
+        Set of canonical paths for the subtree.
+    """
+
+    paths = {field.path}
+    for child in field.children:
+        paths.update(_flatten_field_paths(child))
+    return paths

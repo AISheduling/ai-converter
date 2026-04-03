@@ -1,0 +1,16 @@
+MAPPING IR SYNTHESIS
+
+Conversion hint:
+${conversion_hint}
+
+Source schema:
+${source_schema_json}
+
+Target schema:
+${target_schema_json}
+
+Allowed operations:
+${allowed_operations_json}
+
+Required output schema:
+${output_schema_json}

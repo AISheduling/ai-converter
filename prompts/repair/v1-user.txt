@@ -1,0 +1,22 @@
+MAPPING IR REPAIR
+
+Current MappingIR:
+${mapping_ir_json}
+
+Failing fixture:
+${failing_fixture_json}
+
+Expected result:
+${expected_json}
+
+Actual result:
+${actual_json}
+
+Error log:
+${error_log}
+
+Focused diff:
+${diff_text}
+
+Problematic rules:
+${problematic_rules}

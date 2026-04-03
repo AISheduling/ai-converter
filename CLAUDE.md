@@ -23,11 +23,4 @@ Installed workflow agents:
 - `.claude/agents/task-builder.md`
 - `.claude/agents/task-verifier.md`
 - `.claude/agents/task-fixer.md`
-
-Claude Code note:
-- If `init` just created or refreshed these files during the current Claude Code session, do not assume the refreshed workflow agents are already available.
-- The main Claude session may auto-delegate to these workflow agents when the current proof-loop phase matches their descriptions. If automatic delegation is not precise enough, make the current proof-loop phase more explicit in natural language.
-- TodoWrite or the visible task/todo UI is optional session-scoped progress display only. The canonical durable proof-loop state is the repo-local artifact set under `.agent/tasks/<TASK_ID>/`.
-- Keep this workflow flat. These generated workflow agents are role endpoints, not recursive orchestrators.
-- Keep this block in the root `CLAUDE.md`. If the workflow needs longer repo guidance, prefer `@path` imports or `.claude/rules/*.md` instead of expanding this block.
 <!-- repo-task-proof-loop:end -->

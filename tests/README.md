@@ -4,7 +4,7 @@ This file contains the repository's test-running instructions.
 
 Run all commands from the repository root:
 
-`C:\Users\mlhak\Documents\workplace\stairs\ai-converter`
+`C:\Users\muskrat\workspace\ai-converter`
 
 ## General Rules
 
@@ -16,7 +16,7 @@ Run all commands from the repository root:
 If you want to use the exact project interpreter that was used for the focused verification runs, it is:
 
 ```text
-C:\Users\mlhak\AppData\Local\pypoetry\Cache\virtualenvs\ai-converter-b-GWvKUj-py3.12\Scripts\python.exe
+C:\Users\muskrat\AppData\Local\pypoetry\Cache\virtualenvs\ai-converter-BoqDNqnM-py3.11\Scripts\python.exe
 ```
 
 ## Focused Test Suites
@@ -53,12 +53,28 @@ Command:
 python -m pytest tests/unit/schema -q -p no:cacheprovider
 ```
 
-## Combined Focused Run
+### TASK-03 mapping ir
 
-Use this when you touch both profiling and schema layers:
+Fixtures:
+
+- inline deterministic fixtures in `tests/unit/mapping_ir/`
+
+Tests:
+
+- `tests/unit/mapping_ir/`
+
+Command:
 
 ```bash
-python -m pytest tests/unit/profiling tests/unit/schema -q -p no:cacheprovider
+python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider
+```
+
+## Combined Focused Run
+
+Use this when you touch profiling, schema, and mapping-ir layers together:
+
+```bash
+python -m pytest tests/unit/profiling tests/unit/schema tests/unit/mapping_ir -q -p no:cacheprovider
 ```
 
 ## Alternative With The Exact Poetry Interpreter
@@ -72,7 +88,13 @@ C:\Users\mlhak\AppData\Local\pypoetry\Cache\virtualenvs\ai-converter-b-GWvKUj-py
 ### Profiling and schema together
 
 ```bash
-C:\Users\mlhak\AppData\Local\pypoetry\Cache\virtualenvs\ai-converter-b-GWvKUj-py3.12\Scripts\python.exe -m pytest tests/unit/profiling tests/unit/schema -q -p no:cacheprovider
+C:\Users\muskrat\AppData\Local\pypoetry\Cache\virtualenvs\ai-converter-BoqDNqnM-py3.11\Scripts\python.exe -m pytest tests/unit/profiling tests/unit/schema -q -p no:cacheprovider
+```
+
+### Mapping ir only
+
+```bash
+C:\Users\muskrat\AppData\Local\pypoetry\Cache\virtualenvs\ai-converter-BoqDNqnM-py3.11\Scripts\python.exe -m pytest tests/unit/mapping_ir -q -p no:cacheprovider
 ```
 
 ## Test Layout
