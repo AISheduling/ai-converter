@@ -42,3 +42,7 @@ Installed workflow agents:
 - Keep `dsl-core/` read-only for now; it is treated as an external reference library and example corpus.
 - Focused profiling fixtures live in `tests/fixtures/profiling/`.
 - Focused profiling tests run with `pytest tests/unit/profiling -q`.
+- `TASK-02` adds schema contracts under `src/llm_converter/schema/`.
+- Schema fixtures live under `tests/fixtures/schema/`.
+- Focused schema tests run with `python -m pytest tests/unit/schema -q -p no:cacheprovider`.
+- Do not modify `dsl-core/` while building `TargetSchemaCard`; use it only as the external L1 reference surface.

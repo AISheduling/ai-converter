@@ -46,3 +46,26 @@ pytest tests/unit/profiling -q
 ```
 
 Fixture inputs for the profiling layer live in `tests/fixtures/profiling/`, and a short design note lives in `docs/architecture/profiling.md`.
+
+## TASK-02 Schema Contracts
+
+`TASK-02` adds a schema-first package under `src/llm_converter/schema/`:
+
+- `SourceSchemaSpec` models and deterministic normalization/aggregation helpers
+- `TargetSchemaCard` export from nested Pydantic L1 models
+- budgeted evidence packing from `ProfileReport`
+
+The fixed L1 contract still lives in read-only form under `dsl-core/`.
+
+Relevant paths:
+
+- `src/llm_converter/schema/`
+- `tests/unit/schema/`
+- `tests/fixtures/schema/`
+- `docs/architecture/schema_contracts.md`
+
+Run the focused schema checks with:
+
+```bash
+python -m pytest tests/unit/schema -q -p no:cacheprovider
+```

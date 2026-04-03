@@ -1,0 +1,42 @@
+[
+  {
+    "source_name": "candidate-a",
+    "source_format": "json",
+    "root_type": "list",
+    "schema_fingerprint": "fp-a",
+    "fields": [
+      {
+        "path": "taskName",
+        "semantic_name": "Task Name",
+        "description": "Human readable task name",
+        "dtype": "str",
+        "cardinality": "one",
+        "nullable": false,
+        "aliases": ["task_name", "TaskName"],
+        "unit": null,
+        "examples": ["Planning"],
+        "confidence": 0.9
+      }
+    ]
+  },
+  {
+    "source_name": "candidate-b",
+    "source_format": "json",
+    "root_type": "list",
+    "schema_fingerprint": "fp-b",
+    "fields": [
+      {
+        "path": "task_name",
+        "semantic_name": "task_name",
+        "description": "Name of the task",
+        "dtype": "str",
+        "cardinality": "one",
+        "nullable": false,
+        "aliases": ["taskName"],
+        "unit": null,
+        "examples": ["Execution"],
+        "confidence": 0.7
+      }
+    ]
+  }
+]
