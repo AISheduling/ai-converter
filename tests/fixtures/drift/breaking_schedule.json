@@ -1,0 +1,10 @@
+[
+  {
+    "task_name": "Plan",
+    "status_text": "READY"
+  },
+  {
+    "task_name": "Ship",
+    "status_text": "DONE"
+  }
+]

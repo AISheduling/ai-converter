@@ -1,0 +1,51 @@
+{
+  "subjects": [
+    {
+      "name": "baseline_passthrough",
+      "kind": "baseline",
+      "notes": "Wrap a deterministic callable with BenchmarkSubject.from_converter(...)."
+    },
+    {
+      "name": "compiled_converter",
+      "kind": "compiled",
+      "notes": "Prepare a converter from compile_mapping_ir(...).convert."
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "rename-compatible",
+      "tags": [
+        "drift",
+        "rename"
+      ],
+      "required_fields": [
+        "task.id",
+        "status"
+      ],
+      "fixture_hint": "tests/fixtures/drift/rename_schedule.json",
+      "report_stem": "rename_compatible"
+    },
+    {
+      "name": "additive-compatible",
+      "tags": [
+        "drift",
+        "additive"
+      ],
+      "required_fields": [
+        "task.id",
+        "status"
+      ],
+      "fixture_hint": "tests/fixtures/drift/additive_schedule.json",
+      "report_stem": "additive_compatible"
+    }
+  ],
+  "artifacts": [
+    "benchmark.json",
+    "benchmark.csv",
+    "benchmark.md"
+  ],
+  "notes": [
+    "This file is illustrative only; TASK-05 exposes a library API rather than a fixed CLI.",
+    "Keep benchmark subjects, scenarios, and assertions offline and deterministic."
+  ]
+}

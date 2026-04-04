@@ -1,0 +1,96 @@
+{
+  "baseline_schema": {
+    "source_name": "schedule",
+    "source_format": "json",
+    "root_type": "list",
+    "schema_fingerprint": "baseline-fingerprint",
+    "fields": [
+      {
+        "path": "task_id",
+        "semantic_name": "task_id",
+        "dtype": "str",
+        "cardinality": "one",
+        "nullable": false,
+        "aliases": [],
+        "examples": ["T-1"],
+        "confidence": 1.0
+      },
+      {
+        "path": "status_text",
+        "semantic_name": "status",
+        "dtype": "str",
+        "cardinality": "one",
+        "nullable": false,
+        "aliases": [],
+        "examples": ["READY"],
+        "confidence": 1.0
+      }
+    ]
+  },
+  "rename_candidate": {
+    "source_name": "schedule",
+    "source_format": "json",
+    "root_type": "list",
+    "schema_fingerprint": "rename-fingerprint",
+    "fields": [
+      {
+        "path": "task_identifier",
+        "semantic_name": "task_id",
+        "dtype": "str",
+        "cardinality": "one",
+        "nullable": false,
+        "aliases": [],
+        "examples": ["T-1"],
+        "confidence": 1.0
+      },
+      {
+        "path": "status_text",
+        "semantic_name": "status",
+        "dtype": "str",
+        "cardinality": "one",
+        "nullable": false,
+        "aliases": [],
+        "examples": ["READY"],
+        "confidence": 1.0
+      }
+    ]
+  },
+  "additive_candidate": {
+    "source_name": "schedule",
+    "source_format": "json",
+    "root_type": "list",
+    "schema_fingerprint": "additive-fingerprint",
+    "fields": [
+      {
+        "path": "task_id",
+        "semantic_name": "task_id",
+        "dtype": "str",
+        "cardinality": "one",
+        "nullable": false,
+        "aliases": [],
+        "examples": ["T-1"],
+        "confidence": 1.0
+      },
+      {
+        "path": "status_text",
+        "semantic_name": "status",
+        "dtype": "str",
+        "cardinality": "one",
+        "nullable": false,
+        "aliases": [],
+        "examples": ["READY"],
+        "confidence": 1.0
+      },
+      {
+        "path": "task_name",
+        "semantic_name": "task_name",
+        "dtype": "str",
+        "cardinality": "one",
+        "nullable": true,
+        "aliases": [],
+        "examples": ["Plan"],
+        "confidence": 1.0
+      }
+    ]
+  }
+}

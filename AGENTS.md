@@ -17,6 +17,9 @@ Hard rules:
 - Do not claim completion unless every acceptance criterion is `PASS`.
 - Verifiers judge current code and current command results, not prior chat claims.
 - Fixers should make the smallest defensible diff.
+- For broad Codex tasks, bounded fan-out is allowed only after `init`, only when the user has explicitly asked for delegation or parallel agent work, and only when task shape warrants it: use bounded `explorer` children before or after spec freeze, use bounded `worker` children only after the spec is frozen, keep the task tree shallow, keep evidence ownership with one builder, and keep verdict ownership with one fresh verifier.
+- This root `AGENTS.md` block is the repo-wide Codex baseline. More-specific nested `AGENTS.override.md` or `AGENTS.md` files still take precedence for their directory trees.
+- Keep this block lean. If the workflow needs more Codex guidance, prefer nested `AGENTS.md` / `AGENTS.override.md` files or configured fallback guide docs instead of expanding this root block indefinitely.
 
 Installed workflow agents:
 - `.codex/agents/task-spec-freezer.toml`
@@ -53,6 +56,17 @@ Installed workflow agents:
 - Preferred verification command for TASK-04 is `python -m pytest tests/unit/mapping_ir tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider`.
 - Keep runtime compilation and repair-loop tests offline; use fake repair strategies and avoid live LLM calls or network access.
 
+## TASK-05 Notes
+
+- Drift detection code lives under `src/llm_converter/drift/`.
+- Benchmark and reporting code lives under `src/llm_converter/evaluation/`.
+- Drift fixtures live under `tests/fixtures/drift/`.
+- Focused TASK-05 tests live under `tests/unit/drift/` and `tests/unit/evaluation/`.
+- Benchmark protocol docs live under `docs/evaluation/benchmark_protocol.md`.
+- Example benchmark configs live under `examples/`.
+- Preferred verification command for TASK-05 is `python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider`.
+- Keep drift heuristics, patch application, and benchmark/reporting tests offline; use fake or deterministic converters and do not call live models or the network.
+
 ## Project Notes
 
 - `TASK-01` creates the initial profiling layer under `src/llm_converter/profiling/`.
@@ -67,5 +81,8 @@ Installed workflow agents:
 - Focused mapping-ir tests run with `python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider`.
 - `TASK-04` adds deterministic execution under `src/llm_converter/compiler/` and acceptance validation under `src/llm_converter/validation/`.
 - Focused TASK-04 tests run with `python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider`.
+- `TASK-05` adds deterministic drift detection and benchmark evaluation under `src/llm_converter/drift/` and `src/llm_converter/evaluation/`.
+- Focused TASK-05 tests run with `python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider`.
+- Benchmark examples live under `examples/`, and benchmark protocol docs live under `docs/evaluation/`.
 - `tests/integration/converter_pipeline/` may reuse deterministic profiling fixtures or local inline models, but must stay offline and must not modify `dsl-core/`.
 - Do not modify `dsl-core/` while building `TargetSchemaCard`; use it only as the external L1 reference surface.
