@@ -43,6 +43,16 @@ Installed workflow agents:
 - Preferred verification command for TASK-03 is `python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider`.
 - Use fake or injected adapters in unit tests; do not call live models or the network.
 
+## TASK-04 Notes
+
+- Compiler code lives under `src/llm_converter/compiler/`.
+- Validation and acceptance code lives under `src/llm_converter/validation/`.
+- Focused compiler tests live under `tests/unit/compiler/`.
+- Focused validation tests live under `tests/unit/validation/`.
+- Smoke integration tests live under `tests/integration/converter_pipeline/`.
+- Preferred verification command for TASK-04 is `python -m pytest tests/unit/mapping_ir tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider`.
+- Keep runtime compilation and repair-loop tests offline; use fake repair strategies and avoid live LLM calls or network access.
+
 ## Project Notes
 
 - `TASK-01` creates the initial profiling layer under `src/llm_converter/profiling/`.
@@ -55,4 +65,7 @@ Installed workflow agents:
 - `TASK-03` adds the offline LLM adapter layer and MappingIR contracts under `src/llm_converter/llm/` and `src/llm_converter/mapping_ir/`.
 - Prompt templates for `TASK-03` live under `prompts/`.
 - Focused mapping-ir tests run with `python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider`.
+- `TASK-04` adds deterministic execution under `src/llm_converter/compiler/` and acceptance validation under `src/llm_converter/validation/`.
+- Focused TASK-04 tests run with `python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider`.
+- `tests/integration/converter_pipeline/` may reuse deterministic profiling fixtures or local inline models, but must stay offline and must not modify `dsl-core/`.
 - Do not modify `dsl-core/` while building `TargetSchemaCard`; use it only as the external L1 reference surface.

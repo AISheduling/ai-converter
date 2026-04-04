@@ -65,12 +65,29 @@ Command:
 python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider
 ```
 
-## Combined Focused Run
+### TASK-04 compiler and validation
 
-Use this when you touch profiling, schema, and mapping-ir layers together:
+Tests:
+
+- `tests/unit/compiler/`
+- `tests/unit/validation/`
+
+Smoke integration tests:
+
+- `tests/integration/converter_pipeline/`
+
+Command:
 
 ```bash
-python -m pytest tests/unit/profiling tests/unit/schema tests/unit/mapping_ir -q -p no:cacheprovider
+python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider
+```
+
+## Combined Focused Run
+
+Use this when you touch the offline pipeline from mapping-ir through compiled execution:
+
+```bash
+python -m pytest tests/unit/profiling tests/unit/schema tests/unit/mapping_ir tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider
 ```
 
 ## Alternative With The Exact Poetry Interpreter
@@ -93,10 +110,17 @@ python -m pytest tests/unit/profiling tests/unit/schema -q -p no:cacheprovider
 python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider
 ```
 
+### Compiler, validation, and integration
+
+```bash
+python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider
+```
+
 ## Test Layout
 
 - `tests/conftest.py` contains shared pytest configuration for the repository
 - `tests/unit/` contains focused unit suites
+- `tests/integration/` contains smoke integration suites for compiled execution and validation
 - `tests/fixtures/` contains deterministic input data used by tests
 
 ## Notes

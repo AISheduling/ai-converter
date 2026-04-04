@@ -1,0 +1,164 @@
+"""Focused unit tests for MappingIR compilation and runtime helpers."""
+
+from __future__ import annotations
+
+import pytest
+
+from llm_converter.compiler import compile_mapping_ir
+from llm_converter.compiler.runtime_ops import (
+    UnsafeExpressionError,
+    cast_value,
+    derive_value,
+    map_enum_value,
+    unit_convert_value,
+)
+from llm_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
+
+
+def test_compiler_emits_importable_module() -> None:
+    """Verify that the compiler emits deterministic, importable Python modules.
+
+    Returns:
+        None.
+    """
+
+    first = compile_mapping_ir(_program(), module_name="compiled_demo_one")
+    second = compile_mapping_ir(_program(), module_name="compiled_demo_two")
+
+    assert callable(first.module.convert)
+    assert "def convert(record):" in first.source_code
+    assert first.source_code == second.source_code
+
+
+def test_compiled_converter_executes_without_llm() -> None:
+    """Verify that the compiled converter runs deterministically without LLM usage.
+
+    Returns:
+        None.
+    """
+
+    converter = compile_mapping_ir(_program(), module_name="compiled_demo_exec")
+
+    output = converter.convert(
+        {
+            "task_id": "T-1",
+            "task_name": None,
+            "status_text": "READY",
+            "duration_hours": 1.5,
+            "tags": ["ops", "backend"],
+            "owner": {"email": "ops@example.com"},
+        }
+    )
+
+    assert output == {
+        "task": {
+            "id": "T-1",
+            "name": "Unnamed",
+        },
+        "status": "ready",
+        "duration_minutes": 90.0,
+        "metadata": {
+            "tags": "ops,backend",
+            "owner_email": "ops@example.com",
+            "summary": "Unnamed@T-1",
+        },
+    }
+
+
+def test_runtime_cast_and_enum_mapping() -> None:
+    """Verify that casting and enum mapping helpers behave deterministically.
+
+    Returns:
+        None.
+    """
+
+    assert cast_value("5", "int") == 5
+    assert cast_value("true", "bool") is True
+    assert map_enum_value("READY", {"READY": "ready"}) == "ready"
+
+
+def test_runtime_unit_convert() -> None:
+    """Verify that the runtime unit-conversion helper scales numeric values.
+
+    Returns:
+        None.
+    """
+
+    assert unit_convert_value(2, 60, from_unit="hours", to_unit="minutes") == 120
+    assert unit_convert_value([1, 2], 60, from_unit="hours", to_unit="minutes") == [60, 120]
+
+
+def test_safe_derive_rejects_disallowed_expressions() -> None:
+    """Verify that unsafe derive expressions are rejected without ``eval``.
+
+    Returns:
+        None.
+    """
+
+    with pytest.raises(UnsafeExpressionError):
+        derive_value("__import__('os').system('calc')", {"value": 1})
+
+
+def _program() -> MappingIR:
+    """Build a deterministic MappingIR program used by compiler tests.
+
+    Returns:
+        MappingIR program covering the key TASK-04 runtime helpers.
+    """
+
+    return MappingIR(
+        source_refs=[
+            SourceReference(id="src_task_id", path="task_id", dtype="str"),
+            SourceReference(id="src_task_name", path="task_name", dtype="str"),
+            SourceReference(id="src_status", path="status_text", dtype="str"),
+            SourceReference(id="src_duration_hours", path="duration_hours", dtype="float"),
+            SourceReference(id="src_tags", path="tags", dtype="list"),
+            SourceReference(id="src_owner", path="owner", dtype="dict"),
+        ],
+        steps=[
+            MappingStep(id="copy_task_id", operation=StepOperation(kind="copy", source_ref="src_task_id")),
+            MappingStep(
+                id="default_task_name",
+                operation=StepOperation(kind="default", source_ref="src_task_name", value="Unnamed"),
+            ),
+            MappingStep(
+                id="map_status",
+                operation=StepOperation(kind="map_enum", source_ref="src_status", mapping={"READY": "ready"}),
+            ),
+            MappingStep(
+                id="duration_minutes",
+                operation=StepOperation(
+                    kind="unit_convert",
+                    source_ref="src_duration_hours",
+                    factor=60.0,
+                    from_unit="hours",
+                    to_unit="minutes",
+                ),
+            ),
+            MappingStep(
+                id="merge_tags",
+                operation=StepOperation(kind="merge", source_refs=["src_tags"], delimiter=","),
+            ),
+            MappingStep(
+                id="owner_email",
+                operation=StepOperation(kind="unnest", source_ref="src_owner", child_path="email"),
+            ),
+            MappingStep(
+                id="summary",
+                operation=StepOperation(
+                    kind="derive",
+                    step_refs=["default_task_name", "copy_task_id"],
+                    expression="default_task_name + '@' + copy_task_id",
+                ),
+            ),
+        ],
+        assignments=[
+            TargetAssignment(step_id="copy_task_id", target_path="task.id"),
+            TargetAssignment(step_id="default_task_name", target_path="task.name"),
+            TargetAssignment(step_id="map_status", target_path="status"),
+            TargetAssignment(step_id="duration_minutes", target_path="duration_minutes"),
+            TargetAssignment(step_id="merge_tags", target_path="metadata.tags"),
+            TargetAssignment(step_id="owner_email", target_path="metadata.owner_email"),
+            TargetAssignment(step_id="summary", target_path="metadata.summary"),
+        ],
+    )

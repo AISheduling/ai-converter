@@ -7,6 +7,7 @@ At the current stage the library gives you three main building blocks:
 - profiling raw `CSV`, `JSON`, and `JSONL` inputs into a stable `ProfileReport`
 - building schema contracts and compact evidence bundles on top of that profile
 - synthesizing and validating `MappingIR` candidates with file-backed prompts and a fake LLM adapter
+- compiling valid `MappingIR` programs into pure Python converters with offline acceptance validation
 
 Test-running instructions live in [tests/README.md](tests/README.md).
 
@@ -177,16 +178,62 @@ adapter = OpenAILLMAdapter(
 
 The OpenAI adapter uses the Responses API under the hood and keeps imports lazy, so offline tests can still run without network access by using injected fake clients.
 
+## Use The Compiler And Validation API
+
+`TASK-04` adds deterministic execution under `src/llm_converter/compiler/` and `src/llm_converter/validation/`.
+
+It helps you:
+
+- compile a validated `MappingIR` program into an importable Python module
+- execute the compiled converter without any live LLM calls
+- validate the converted payload structurally with a target `Pydantic` model
+- run semantic assertions and bounded repair loops offline with fake patch strategies
+
+### Example: compile a `MappingIR` program and validate one output
+
+```python
+from pydantic import BaseModel
+
+from llm_converter.compiler import compile_mapping_ir
+from llm_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
+from llm_converter.validation import validate_structural_output
+
+
+class DemoTask(BaseModel):
+    id: str
+
+
+class DemoTarget(BaseModel):
+    task: DemoTask
+
+
+program = MappingIR(
+    source_refs=[SourceReference(id="src_task_id", path="task_id", dtype="str")],
+    steps=[MappingStep(id="copy_task_id", operation=StepOperation(kind="copy", source_ref="src_task_id"))],
+    assignments=[TargetAssignment(step_id="copy_task_id", target_path="task.id")],
+)
+
+compiled = compile_mapping_ir(program)
+payload = compiled.convert({"task_id": "T-1"})
+result = validate_structural_output(payload, DemoTarget)
+
+print(payload)
+print(result.valid)
+```
+
 ## Package Layout
 
 - `src/llm_converter/profiling/` contains the deterministic profiling layer
 - `src/llm_converter/schema/` contains schema contracts and evidence packing
 - `src/llm_converter/llm/` contains prompt rendering and adapter contracts
 - `src/llm_converter/mapping_ir/` contains MappingIR models, validation, ranking, and repair helpers
+- `src/llm_converter/compiler/` contains deterministic code generation and module loading
+- `src/llm_converter/validation/` contains structural, semantic, acceptance, and repair-loop validation
 - `prompts/` contains versioned prompt template files
 - `docs/architecture/profiling.md` documents the profiling design
 - `docs/architecture/schema_contracts.md` documents the schema contract layer
 - `docs/prompts/mapping_ir.md` documents the MappingIR prompt layer
+- `docs/architecture/compiler_and_validation.md` documents the execution and validation design
 
 ## Project Notes
 
