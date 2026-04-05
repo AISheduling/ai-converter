@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import BaseModel, Field
 
 from ai_converter.profiling.report_builder import build_profile_report
 from ai_converter.schema.evidence_packer import EvidenceBudgetExceededError, pack_profile_evidence
@@ -55,6 +56,24 @@ def test_target_card_builder_preserves_required_optional_flags() -> None:
     assert fields["project"]["required"] is True
     assert fields["project.name"]["required"] is True
     assert fields["tasks.name"]["required"] is False
+
+
+def test_target_card_builder_preserves_default_factory_defaults() -> None:
+    """Verify that default_factory-backed fields keep their exported default."""
+
+    class DemoTarget(BaseModel):
+        """Local schema used to verify default_factory export behavior."""
+
+        tags: list[str] = Field(default_factory=list)
+        names: list[str] = []
+        title: str
+
+    card = build_target_schema_card(DemoTarget)
+    fields = _field_map(card.model_dump()["fields"])
+
+    assert fields["tags"]["default"] == fields["names"]["default"] == "[]"
+    assert fields["tags"]["required"] is False
+    assert fields["title"]["required"] is True
 
 
 def test_target_card_builder_extracts_descriptions_and_enums() -> None:

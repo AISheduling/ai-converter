@@ -63,7 +63,9 @@ def _build_field_card(name: str, annotation: Any, field_info: Any, path: str) ->
         extra = getattr(field_info, "json_schema_extra", None) or {}
         description = extra.get("description")
 
-    default = None if field_info.default is PydanticUndefined else field_info.default
+    default = field_info.get_default(call_default_factory=True)
+    if default is PydanticUndefined:
+        default = None
     return TargetFieldCard(
         name=name,
         path=path,
