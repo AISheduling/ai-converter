@@ -106,6 +106,23 @@ def test_compiler_rejects_duplicate_source_ref_ids_when_validation_is_disabled()
         )
 
 
+def test_compiled_converter_fails_fast_on_hierarchical_target_conflict_when_validation_is_disabled() -> None:
+    """Verify that bypass paths do not silently clobber parent target values.
+
+    Returns:
+        None.
+    """
+
+    converter = compile_mapping_ir(
+        _program_with_hierarchical_target_conflict(),
+        module_name="compiled_hierarchical_target_conflict",
+        validate_program=False,
+    )
+
+    with pytest.raises(ValueError, match="existing parent value at 'task'"):
+        converter.convert({"task_payload": "legacy", "task_id": "ID-2"})
+
+
 def test_converter_package_export_is_deterministic() -> None:
     """Verify that package export writes deterministic manifest and payload files.
 
@@ -248,4 +265,27 @@ def _program_with_duplicate_source_ref_ids() -> MappingIR:
         ],
         steps=[MappingStep(id="copy_task_id", operation=StepOperation(kind="copy", source_ref="src_task_id"))],
         assignments=[TargetAssignment(step_id="copy_task_id", target_path="task.id")],
+    )
+
+
+def _program_with_hierarchical_target_conflict() -> MappingIR:
+    """Build an invalid MappingIR program with parent and child writes.
+
+    Returns:
+        Invalid MappingIR program that bypass paths must reject at runtime.
+    """
+
+    return MappingIR(
+        source_refs=[
+            SourceReference(id="src_task_payload", path="task_payload", dtype="str"),
+            SourceReference(id="src_task_id", path="task_id", dtype="str"),
+        ],
+        steps=[
+            MappingStep(id="copy_task_payload", operation=StepOperation(kind="copy", source_ref="src_task_payload")),
+            MappingStep(id="copy_task_id", operation=StepOperation(kind="copy", source_ref="src_task_id")),
+        ],
+        assignments=[
+            TargetAssignment(step_id="copy_task_payload", target_path="task"),
+            TargetAssignment(step_id="copy_task_id", target_path="task.id"),
+        ],
     )

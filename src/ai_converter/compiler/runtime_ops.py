@@ -56,11 +56,18 @@ def assign_path(target: dict[str, Any], path: str, value: Any, *, allow_overwrit
 
     cursor: dict[str, Any] = target
     parts = path.split(".")
+    traversed_parts: list[str] = []
     for part in parts[:-1]:
+        traversed_parts.append(part)
         next_value = cursor.get(part)
-        if not isinstance(next_value, dict):
+        if next_value is None:
             next_value = {}
             cursor[part] = next_value
+        elif not isinstance(next_value, dict):
+            ancestor_path = ".".join(traversed_parts)
+            raise ValueError(
+                f"target path {path!r} conflicts with existing parent value at {ancestor_path!r}"
+            )
         cursor = next_value
 
     final_key = parts[-1]

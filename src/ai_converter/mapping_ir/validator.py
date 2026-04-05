@@ -326,6 +326,21 @@ class MappingIRValidator:
                         location=f"assignments.{target_path}",
                     )
                 )
+        for target_path in sorted(writes):
+            for ancestor_path in _ancestor_target_paths(target_path):
+                if ancestor_path not in writes:
+                    continue
+                combined_step_ids = ", ".join(dict.fromkeys(writes[ancestor_path] + writes[target_path]))
+                issues.append(
+                    ValidationIssue(
+                        code="conflicting_target_write",
+                        message=(
+                            "hierarchical target paths conflict between "
+                            f"'{ancestor_path}' and '{target_path}': {combined_step_ids}"
+                        ),
+                        location=f"assignments.{target_path}",
+                    )
+                )
         return issues
 
     def _validate_conditions(
@@ -482,3 +497,17 @@ def _flatten_field_paths(
     for child in field.children:
         paths.update(_flatten_field_paths(child, include_containers=include_containers))
     return paths
+
+
+def _ancestor_target_paths(path: str) -> list[str]:
+    """Return dotted ancestor target paths for one canonical target path.
+
+    Args:
+        path: Canonical target path to inspect.
+
+    Returns:
+        Ordered list of ancestor paths from shallowest to deepest.
+    """
+
+    parts = path.split(".")
+    return [".".join(parts[:index]) for index in range(1, len(parts))]

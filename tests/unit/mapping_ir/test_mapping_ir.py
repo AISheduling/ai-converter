@@ -95,6 +95,23 @@ def test_mapping_ir_validator_rejects_conflicting_target_writes() -> None:
     assert any(issue.code == "conflicting_target_write" for issue in result.issues)
 
 
+def test_mapping_ir_validator_rejects_hierarchical_target_conflicts() -> None:
+    """Verify that ancestor and descendant target assignments are rejected.
+
+    Returns:
+        None.
+    """
+
+    validator = MappingIRValidator()
+    result = validator.validate(_candidate_with_hierarchical_conflict(), target_schema=_target_schema())
+
+    assert result.valid is False
+    issue = next(issue for issue in result.issues if issue.code == "conflicting_target_write")
+    assert issue.location == "assignments.task.id"
+    assert "task" in issue.message
+    assert "task.id" in issue.message
+
+
 def test_mapping_ir_validator_rejects_duplicate_source_ref_ids() -> None:
     """Verify that duplicate source reference ids are rejected.
 
@@ -527,6 +544,29 @@ def _candidate_with_duplicate_source_ref_ids() -> MappingIR:
         ],
         steps=[MappingStep(id="copy_task_id", operation=StepOperation(kind="copy", source_ref="src_task_id"))],
         assignments=[TargetAssignment(step_id="copy_task_id", target_path="task.id")],
+    )
+
+
+def _candidate_with_hierarchical_conflict() -> MappingIR:
+    """Build an invalid candidate with parent and child target-path writes.
+
+    Returns:
+        Invalid MappingIR program with a hierarchical target-path conflict.
+    """
+
+    return MappingIR(
+        source_refs=[
+            SourceReference(id="src_task_payload", path="task_payload", dtype="str"),
+            SourceReference(id="src_task_id", path="task_id", dtype="str"),
+        ],
+        steps=[
+            MappingStep(id="copy_task_payload", operation=StepOperation(kind="copy", source_ref="src_task_payload")),
+            MappingStep(id="copy_task_id", operation=StepOperation(kind="copy", source_ref="src_task_id")),
+        ],
+        assignments=[
+            TargetAssignment(step_id="copy_task_payload", target_path="task"),
+            TargetAssignment(step_id="copy_task_id", target_path="task.id"),
+        ],
     )
 
 
