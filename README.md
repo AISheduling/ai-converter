@@ -72,7 +72,7 @@ What you get back:
 
 ## Use The Schema API
 
-The schema contract layer lives in `src/llm_converter/schema/`.
+The schema contract layer lives in `src/ai_converter/schema/`.
 
 It helps you:
 
@@ -81,23 +81,30 @@ It helps you:
 - export Pydantic target models into compact `TargetSchemaCard` objects
 - compress a `ProfileReport` into a budgeted evidence bundle for later LLM stages
 
+If the requested budget cannot even fit the mandatory evidence summary,
+`pack_profile_evidence()` raises `EvidenceBudgetExceededError` instead of
+returning an oversized bundle with `truncated=True`.
+
 ### Example: pack evidence from a profile
 
 ```python
 from ai_converter.profiling import build_profile_report
-from ai_converter.schema import pack_profile_evidence
+from ai_converter.schema import EvidenceBudgetExceededError, pack_profile_evidence
 
 report = build_profile_report("tests/fixtures/profiling/projects.json")
-bundle = pack_profile_evidence(
-    report,
-    budget=1400,
-    mode="balanced",
-    format_hint="project schedule data",
-)
-
-print(bundle.summary.field_count)
-print(bundle.estimated_size)
-print(bundle.truncated)
+try:
+    bundle = pack_profile_evidence(
+        report,
+        budget=1400,
+        mode="balanced",
+        format_hint="project schedule data",
+    )
+except EvidenceBudgetExceededError as error:
+    print(error.minimum_size)
+else:
+    print(bundle.summary.field_count)
+    print(bundle.estimated_size)
+    print(bundle.truncated)
 ```
 
 ### Example: build a target schema card from a Pydantic model

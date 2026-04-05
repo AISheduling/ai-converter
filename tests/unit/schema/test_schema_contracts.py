@@ -6,8 +6,10 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 from ai_converter.profiling.report_builder import build_profile_report
-from ai_converter.schema.evidence_packer import pack_profile_evidence
+from ai_converter.schema.evidence_packer import EvidenceBudgetExceededError, pack_profile_evidence
 from ai_converter.schema.source_spec_aggregator import merge_source_schema_candidates
 from ai_converter.schema.source_spec_models import (
     SOURCE_SCHEMA_SPEC_VERSION,
@@ -77,6 +79,32 @@ def test_evidence_packer_respects_budget() -> None:
 
     assert packed.estimated_size <= 700
     assert packed.mode == "compact"
+    assert packed.truncated is True
+
+
+def test_evidence_packer_rejects_impossible_budget() -> None:
+    """Verify that tiny budgets raise an explicit deterministic refusal."""
+
+    report = build_profile_report(PROFILE_FIXTURES / "projects.json")
+
+    with pytest.raises(EvidenceBudgetExceededError) as exc_info:
+        pack_profile_evidence(report, budget=80, mode="compact")
+
+    assert exc_info.value.budget == 80
+    assert exc_info.value.minimum_size > 80
+    assert exc_info.value.mode == "compact"
+
+
+def test_evidence_packer_skips_oversized_first_field_when_base_bundle_fits() -> None:
+    """Verify that a fitting base bundle is returned instead of an oversized first field."""
+
+    report = build_profile_report(PROFILE_FIXTURES / "projects.json")
+
+    packed = pack_profile_evidence(report, budget=320, mode="compact")
+
+    assert packed.estimated_size <= 320
+    assert packed.fields == []
+    assert packed.samples == []
     assert packed.truncated is True
 
 

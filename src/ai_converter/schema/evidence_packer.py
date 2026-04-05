@@ -18,6 +18,26 @@ _MODE_LIMITS: dict[EvidencePackMode, tuple[int, int]] = {
 }
 
 
+class EvidenceBudgetExceededError(RuntimeError):
+    """Error raised when even the minimal evidence bundle exceeds the budget."""
+
+    def __init__(self, *, budget: int, minimum_size: int, mode: EvidencePackMode) -> None:
+        """Initialize one deterministic evidence-budget error.
+
+        Args:
+            budget: Requested maximum serialized bundle size.
+            minimum_size: Smallest bundle size that can be produced.
+            mode: Packing mode requested by the caller.
+        """
+
+        self.budget = budget
+        self.minimum_size = minimum_size
+        self.mode = mode
+        super().__init__(
+            f"minimal evidence bundle size {minimum_size} exceeds budget {budget} for mode {mode!r}"
+        )
+
+
 class PackedFieldEvidence(BaseModel):
     """Compact fact bundle for one source path."""
 
@@ -81,6 +101,9 @@ def pack_profile_evidence(
 
     Returns:
         Deterministic evidence bundle that fits the requested packing mode and budget.
+
+    Raises:
+        EvidenceBudgetExceededError: If even the minimal bundle exceeds the budget.
     """
 
     field_limit, sample_limit = _MODE_LIMITS[mode]
@@ -96,6 +119,13 @@ def pack_profile_evidence(
             schema_fingerprint=report.schema_fingerprint,
         ),
     )
+    bundle.estimated_size = _estimate_size(bundle)
+    if bundle.estimated_size > budget:
+        raise EvidenceBudgetExceededError(
+            budget=budget,
+            minimum_size=bundle.estimated_size,
+            mode=mode,
+        )
 
     selected_fields = 0
     for field in sorted(report.field_profiles, key=lambda item: (-_field_score(item), item.path)):
@@ -105,7 +135,7 @@ def pack_profile_evidence(
         candidate = bundle.model_copy(deep=True)
         candidate.fields.append(_pack_field(field))
         candidate.estimated_size = _estimate_size(candidate)
-        if candidate.estimated_size > budget and bundle.fields:
+        if candidate.estimated_size > budget:
             bundle.truncated = True
             continue
         bundle = candidate
@@ -119,19 +149,22 @@ def pack_profile_evidence(
         candidate = bundle.model_copy(deep=True)
         candidate.samples.append(_pack_sample(sample))
         candidate.estimated_size = _estimate_size(candidate)
-        if candidate.estimated_size > budget and bundle.samples:
+        if candidate.estimated_size > budget:
             bundle.truncated = True
             continue
-        if candidate.estimated_size > budget and not bundle.samples:
-            bundle.truncated = True
-            break
         bundle = candidate
         selected_samples += 1
 
     if not bundle.samples and report.representative_samples:
-        bundle = _ensure_at_least_one_sample(bundle, report.representative_samples[0])
+        bundle = _ensure_at_least_one_sample(bundle, report.representative_samples)
 
     bundle.estimated_size = _estimate_size(bundle)
+    if bundle.estimated_size > budget:
+        raise EvidenceBudgetExceededError(
+            budget=budget,
+            minimum_size=bundle.estimated_size,
+            mode=mode,
+        )
     return bundle
 
 
@@ -189,26 +222,32 @@ def _estimate_size(bundle: PackedEvidenceBundle) -> int:
     return len(json.dumps(bundle.model_dump(mode="json"), sort_keys=True, ensure_ascii=True))
 
 
-def _ensure_at_least_one_sample(bundle: PackedEvidenceBundle, sample: SampleRecord) -> PackedEvidenceBundle:
+def _ensure_at_least_one_sample(
+    bundle: PackedEvidenceBundle,
+    samples: list[SampleRecord],
+) -> PackedEvidenceBundle:
     """Try to preserve at least one representative sample within the budget.
 
     Args:
         bundle: Current packed evidence bundle under construction.
-        sample: Representative sample to preserve if possible.
+        samples: Representative samples to preserve if possible.
 
     Returns:
         Adjusted bundle that keeps at least one sample when the budget allows it.
+        Otherwise the current in-budget bundle is returned unchanged.
     """
 
-    candidate = bundle.model_copy(deep=True)
-    while candidate.fields:
-        candidate.fields.pop()
-        tentative = candidate.model_copy(deep=True)
-        tentative.samples = [_pack_sample(sample)]
-        tentative.estimated_size = _estimate_size(tentative)
-        if tentative.estimated_size <= candidate.budget:
-            return tentative
-        candidate = tentative.model_copy(deep=True, update={"samples": []})
+    for sample in samples:
+        candidate = bundle.model_copy(deep=True)
+        while True:
+            tentative = candidate.model_copy(deep=True)
+            tentative.samples = [_pack_sample(sample)]
+            tentative.estimated_size = _estimate_size(tentative)
+            if tentative.estimated_size <= candidate.budget:
+                return tentative
+            if not candidate.fields:
+                break
+            candidate.fields.pop()
     return bundle
 
 
