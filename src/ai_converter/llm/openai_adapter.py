@@ -148,7 +148,8 @@ class OpenAILLMAdapter(LLMAdapter):
             self._client = openai_module.OpenAI(**self._client_kwargs)
         return self._client
 
-    def _input_items(self, prompt: PromptEnvelope) -> list[dict[str, str]]:
+    @staticmethod
+    def _input_items(prompt: PromptEnvelope) -> list[dict[str, str]]:
         """Convert a prompt envelope into Responses API input items.
 
         Args:
@@ -163,8 +164,8 @@ class OpenAILLMAdapter(LLMAdapter):
             {"role": "user", "content": prompt.user_prompt},
         ]
 
+    @staticmethod
     def _combined_metadata(
-        self,
         prompt: PromptEnvelope,
         metadata: Mapping[str, Any] | None,
     ) -> dict[str, Any]:
@@ -180,7 +181,8 @@ class OpenAILLMAdapter(LLMAdapter):
 
         return {**prompt.metadata, **dict(metadata or {})}
 
-    def _request_metadata(self, metadata: Mapping[str, Any]) -> dict[str, str]:
+    @staticmethod
+    def _request_metadata(metadata: Mapping[str, Any]) -> dict[str, str]:
         """Coerce metadata into the string-valued shape accepted by the SDK.
 
         Args:
@@ -195,7 +197,8 @@ class OpenAILLMAdapter(LLMAdapter):
             request_metadata[str(key)] = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True)
         return request_metadata
 
-    def _usage(self, response: Any) -> LLMUsage:
+    @staticmethod
+    def _usage(response: Any) -> LLMUsage:
         """Extract usage information from an OpenAI response object.
 
         Args:
@@ -212,7 +215,8 @@ class OpenAILLMAdapter(LLMAdapter):
             total_tokens=getattr(usage, "total_tokens", None),
         )
 
-    def _response_text(self, response: Any) -> str:
+    @staticmethod
+    def _response_text(response: Any) -> str:
         """Extract raw text from an OpenAI response object.
 
         Args:
@@ -244,8 +248,8 @@ class OpenAILLMAdapter(LLMAdapter):
                         chunks.append(text_value)
         return "\n".join(chunk for chunk in chunks if chunk)
 
+    @staticmethod
     def _parsed_output(
-        self,
         response: Any,
         *,
         schema: type[StructuredModelT],
@@ -277,8 +281,8 @@ class OpenAILLMAdapter(LLMAdapter):
                 return schema.model_validate(json.loads(raw_text))
         raise ValidationError.from_exception_data(schema.__name__, [])
 
+    @staticmethod
     def _error_response(
-        self,
         prompt: PromptEnvelope,
         metadata: dict[str, Any],
         error: Exception,

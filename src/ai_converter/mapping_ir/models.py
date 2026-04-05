@@ -80,7 +80,7 @@ class SourceReference(BaseModel):
 
 
 class StepOperation(BaseModel):
-    """Typed operation payload for one mapping step.
+    """Typed operation payload for a single mapping step.
 
     Attributes:
         kind: Supported operation kind for the current step.
@@ -196,7 +196,7 @@ class MappingStep(BaseModel):
     @field_validator("id")
     @classmethod
     def _strip_id(cls, value: str) -> str:
-        """Normalize one step identifier.
+        """Normalize a step identifier.
 
         Args:
             value: Raw step identifier.
@@ -229,7 +229,7 @@ class MappingStep(BaseModel):
 
 
 class TargetAssignment(BaseModel):
-    """Assignment from one mapping step output into a target path.
+    """Assignment from a mapping-step output into a target path.
 
     Attributes:
         step_id: Upstream step whose output should be written to the target.

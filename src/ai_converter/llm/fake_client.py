@@ -156,7 +156,8 @@ class FakeLLMAdapter(LLMAdapter):
             prompt=prompt,
         )
 
-    def _pop_reply(self, queue: list[FakeLLMReply], *, method: str) -> FakeLLMReply:
+    @staticmethod
+    def _pop_reply(queue: list[FakeLLMReply], *, method: str) -> FakeLLMReply:
         """Pop one fake reply or synthesize a deterministic error reply.
 
         Args:
@@ -179,8 +180,8 @@ class FakeLLMAdapter(LLMAdapter):
             ]
         )
 
+    @staticmethod
     def _coerce_structured_payload(
-        self,
         reply: FakeLLMReply,
         schema: type[StructuredModelT],
     ) -> tuple[StructuredModelT | None, list[LLMError]]:
@@ -211,7 +212,8 @@ class FakeLLMAdapter(LLMAdapter):
         except ValidationError as error:
             return None, [LLMError(code="validation_error", message=str(error), retryable=False)]
 
-    def _resolve_raw_text(self, reply: FakeLLMReply) -> str:
+    @staticmethod
+    def _resolve_raw_text(reply: FakeLLMReply) -> str:
         """Return deterministic raw text for one queued reply.
 
         Args:

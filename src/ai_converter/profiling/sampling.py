@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from .models import SampleRecord
+from .type_labels import python_value_type_label
 
 
 class SamplingCandidate(BaseModel):
@@ -75,7 +76,7 @@ def _select_from_flattened(
         for path, values in flattened.items():
             path_counts[path] += 1
             for value in values:
-                typed_path_counts[(path, _type_name(value))] += 1
+                typed_path_counts[(path, python_value_type_label(value))] += 1
 
     selected: list[SampleRecord] = []
     covered_paths: set[str] = set()
@@ -179,33 +180,8 @@ def _score_record(
         for value in values:
             if value is not None:
                 non_null_values += 1
-            rarity_bonus += 1.0 / typed_path_counts[(path, _type_name(value))]
+            rarity_bonus += 1.0 / typed_path_counts[(path, python_value_type_label(value))]
         rarity_bonus += 1.0 / path_counts[path]
     completeness_bonus = non_null_values / max(1, len(record_paths) or 1)
 
     return new_path_coverage + completeness_bonus + rarity_bonus, record_paths
-
-
-def _type_name(value: Any) -> str:
-    """Return the normalized sampling type label for a Python value.
-
-    Args:
-        value: Python value observed while scoring samples.
-
-    Returns:
-        Normalized sampling type label for the value.
-    """
-
-    if value is None:
-        return "null"
-    if isinstance(value, bool):
-        return "bool"
-    if isinstance(value, int) and not isinstance(value, bool):
-        return "int"
-    if isinstance(value, float):
-        return "float"
-    if isinstance(value, list):
-        return "list"
-    if isinstance(value, dict):
-        return "object"
-    return "str"

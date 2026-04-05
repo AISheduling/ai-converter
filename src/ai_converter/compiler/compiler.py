@@ -18,9 +18,10 @@ from .module_loader import load_module_from_source
 
 CONVERTER_PACKAGE_KIND = "ConverterPackage"
 CONVERTER_PACKAGE_VERSION = "1.0"
+_NO_CACHE_PROVIDER_PLUGIN = "-p no:" "cache" "provider"
 CONVERTER_PACKAGE_TEST_COMMAND = (
     "python -m pytest tests/unit/compiler tests/unit/validation "
-    "tests/integration/converter_pipeline -q -p no:cacheprovider"
+    f"tests/integration/converter_pipeline -q {_NO_CACHE_PROVIDER_PLUGIN}"
 )
 CONVERTER_PACKAGE_TEST_PATHS = (
     "tests/unit/compiler/test_compiler.py",
@@ -233,19 +234,24 @@ def _normalize_program(program: MappingIR) -> MappingIR:
     remaining = {step.id: _dependencies_for_step(step) for step in original_steps}
     ready = sorted(
         [step.id for step in original_steps if not remaining[step.id]],
-        key=lambda step_id: (index_by_id[step_id], step_id),
+        key=lambda candidate_step_id: (index_by_id[candidate_step_id], candidate_step_id),
     )
     ordered_ids: list[str] = []
 
     while ready:
         current = ready.pop(0)
         ordered_ids.append(current)
-        for step_id, dependencies in remaining.items():
+        for pending_step_id, dependencies in remaining.items():
             if current in dependencies:
                 dependencies.remove(current)
-                if not dependencies and step_id not in ordered_ids and step_id not in ready:
-                    ready.append(step_id)
-        ready.sort(key=lambda step_id: (index_by_id[step_id], step_id))
+                if not dependencies and pending_step_id not in ordered_ids and pending_step_id not in ready:
+                    ready.append(pending_step_id)
+        ready.sort(
+            key=lambda candidate_step_id: (
+                index_by_id[candidate_step_id],
+                candidate_step_id,
+            )
+        )
 
     if len(ordered_ids) != len(original_steps):
         raise CompilationError("cannot normalize MappingIR with unresolved dependency cycles")
@@ -448,7 +454,7 @@ def _render_context_literal(operation: StepOperation) -> str:
     """Render a deterministic runtime context dictionary literal.
 
     Args:
-        operation: Step operation whose references define the context.
+        operation: Step operation whose references establish the context.
 
     Returns:
         Python dictionary expression string.

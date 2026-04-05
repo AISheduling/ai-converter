@@ -113,12 +113,12 @@ def compute_macro_micro_accuracy(
     """
 
     if not case_metrics:
-        return (0.0, 0.0)
+        return 0.0, 0.0
     macro = mean(metric.field_accuracy for metric in case_metrics)
     total_fields = sum(metric.total_fields for metric in case_metrics)
     matched_fields = sum(metric.matched_fields for metric in case_metrics)
     micro = 0.0 if total_fields == 0 else matched_fields / total_fields
-    return (macro, micro)
+    return macro, micro
 
 
 def build_benchmark_metrics(

@@ -7,7 +7,6 @@ from types import NoneType, UnionType
 from typing import Any, Literal, get_args, get_origin
 
 from pydantic import BaseModel
-from pydantic.fields import PydanticUndefined
 
 from .target_card_models import TargetFieldCard, TargetSchemaCard
 
@@ -63,9 +62,7 @@ def _build_field_card(name: str, annotation: Any, field_info: Any, path: str) ->
         extra = getattr(field_info, "json_schema_extra", None) or {}
         description = extra.get("description")
 
-    default = field_info.get_default(call_default_factory=True)
-    if default is PydanticUndefined:
-        default = None
+    default = None if field_info.is_required() else field_info.get_default(call_default_factory=True)
     return TargetFieldCard(
         name=name,
         path=path,

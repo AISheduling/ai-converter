@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from difflib import SequenceMatcher
+from typing import Literal
 
 from ai_converter.profiling.models import FieldProfile, ProfileReport
 from ai_converter.schema import SourceFieldSpec, SourceSchemaSpec
@@ -134,7 +135,7 @@ def classify_drift(
             baseline_profiles[path],
             baseline_schema_fields.get(path),
         )
-        classification = (
+        classification: DriftClassification = (
             "breaking_change" if baseline_signature.present_ratio >= 0.95 else "semantic_change"
         )
         field_drifts.append(
@@ -203,7 +204,7 @@ def _signature_from_inputs(
 
     dominant_type = _dominant_type(profile)
     enum_values = [entry.value for entry in profile.top_values]
-    cardinality = (
+    cardinality: Literal["one", "many"] = (
         schema_field.cardinality
         if schema_field is not None
         else ("many" if profile.path.endswith("[]") or (profile.max_array_length or 0) > 1 else "one")
@@ -273,7 +274,9 @@ def _classify_shared_signature(
         else:
             severity = "breaking_change"
 
-    if baseline_signature.present_ratio >= 0.95 and candidate_signature.present_ratio < 0.95:
+    was_near_required = baseline_signature.present_ratio >= 0.95
+    became_partially_missing = candidate_signature.present_ratio < 0.95
+    if was_near_required and became_partially_missing:
         reasons.append("A near-required field became partially missing in the candidate profile.")
         severity = "breaking_change"
 
@@ -400,7 +403,7 @@ def _normalized_name(name: str) -> str:
         name: Raw leaf name.
 
     Returns:
-        A lower-cased alpha-numeric string without separators.
+        A lower-cased alphanumeric string without separators.
     """
 
     return "".join(character for character in name.lower() if character.isalnum())

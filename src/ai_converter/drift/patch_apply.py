@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ai_converter.mapping_ir import MappingIR, MappingStep
+from ai_converter.mapping_ir import MappingIR, MappingStep, SourceReference
 from ai_converter.schema import SourceSchemaSpec
 
 from .models import (
@@ -68,7 +68,7 @@ def apply_source_schema_patch(
                 )
             examples = list(field.examples)
             examples.extend(example for example in operation.append_examples if example not in examples)
-            updates = {"examples": examples}
+            updates: dict[str, object] = {"examples": examples}
             if operation.dtype is not None:
                 updates["dtype"] = operation.dtype
             if operation.nullable is not None:
@@ -104,8 +104,12 @@ def apply_mapping_ir_patch(
     """
 
     patched = mapping_ir.model_copy(deep=True)
-    source_refs = {source_ref.id: source_ref for source_ref in patched.source_refs}
-    steps = {step.id: step for step in patched.steps}
+    source_refs: dict[str, SourceReference] = {
+        source_ref.id: source_ref for source_ref in patched.source_refs
+    }
+    steps: dict[str, MappingStep] = {step.id: step for step in patched.steps}
+    original_source_refs: list[SourceReference] = list(mapping_ir.source_refs)
+    original_steps: list[MappingStep] = list(mapping_ir.steps)
 
     for operation in patch.mapping_ir_operations:
         if isinstance(operation, RetargetSourceRefOperation):
@@ -164,11 +168,15 @@ def apply_mapping_ir_patch(
 
         raise PatchApplyError(f"unsupported MappingIR patch operation: {operation!r}")
 
-    patched.source_refs = [source_refs[source_ref.id] for source_ref in mapping_ir.source_refs if source_ref.id in source_refs]
+    patched.source_refs = [
+        source_refs[source_ref.id]
+        for source_ref in original_source_refs
+        if source_ref.id in source_refs
+    ]
     for source_ref_id, source_ref in source_refs.items():
-        if not any(existing.id == source_ref_id for existing in mapping_ir.source_refs):
+        if not any(existing.id == source_ref_id for existing in original_source_refs):
             patched.source_refs.append(source_ref)
-    patched.steps = [steps[step.id] for step in mapping_ir.steps]
+    patched.steps = [steps[step.id] for step in original_steps]
     return patched
 
 

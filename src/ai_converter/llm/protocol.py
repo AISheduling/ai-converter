@@ -9,6 +9,7 @@ from typing import Any, Generic, Literal, Mapping, TypeVar
 
 from pydantic import BaseModel
 
+ResponsePayloadT = TypeVar("ResponsePayloadT")
 StructuredModelT = TypeVar("StructuredModelT", bound=BaseModel)
 LLMCallBudgetStage = Literal["schema", "mapping", "repair"]
 TRACE_ARTIFACT_VERSION = "1.0"
@@ -140,14 +141,14 @@ class LLMError:
         """Return a machine-readable representation of one adapter error.
 
         Returns:
-            Dictionary with the error code, message, and retryability.
+            Dictionary with the error code, message, and retry behavior.
         """
 
         return asdict(self)
 
 
 @dataclass(slots=True)
-class LLMResponse(Generic[StructuredModelT]):
+class LLMResponse(Generic[ResponsePayloadT]):
     """Unified response shape for text and structured generations.
 
     Attributes:
@@ -160,7 +161,7 @@ class LLMResponse(Generic[StructuredModelT]):
     """
 
     raw_text: str
-    parsed: StructuredModelT | None = None
+    parsed: ResponsePayloadT | None = None
     usage: LLMUsage = field(default_factory=LLMUsage)
     metadata: dict[str, Any] = field(default_factory=dict)
     errors: list[LLMError] = field(default_factory=list)
@@ -577,14 +578,14 @@ class LLMCallBudgetLedger:
 
     def _record_response(
         self,
-        response: LLMResponse[StructuredModelT],
+        response: LLMResponse[ResponsePayloadT],
         *,
         stage: LLMCallBudgetStage,
         method: str,
         prompt: PromptEnvelope,
         schema_name: str | None,
         metadata: Mapping[str, Any] | None,
-    ) -> LLMResponse[StructuredModelT]:
+    ) -> LLMResponse[ResponsePayloadT]:
         """Persist one counted call in the shared budget ledger.
 
         Args:

@@ -28,7 +28,7 @@ class SourceSchemaSpec(BaseModel):
     """A deterministic schema-first view of the profiled L0 input.
 
     The serialized artifact contract is versioned at the top level so that
-    persisted schema payloads can evolve independently from prompt-template
+    persisted schema payloads can evolve independently of prompt-template
     versions or surrounding pipeline metadata.
     """
 

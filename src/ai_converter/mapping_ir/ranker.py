@@ -192,4 +192,4 @@ def _sort_key(candidate: RankedCandidate) -> tuple[float, str]:
         Tuple sorting highest score first and fingerprint second.
     """
 
-    return (-candidate.score, candidate.fingerprint)
+    return -candidate.score, candidate.fingerprint

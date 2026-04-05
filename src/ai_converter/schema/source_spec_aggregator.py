@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 import re
-from typing import Iterable
+from typing import Iterable, Literal, TypeVar
 
 from .source_spec_models import SourceFieldSpec, SourceSchemaSpec
 from .source_spec_normalizer import normalize_source_schema_spec
 
 _TOKEN_PATTERN = re.compile(r"[^a-z0-9]+")
+CounterValueT = TypeVar("CounterValueT", bound=str)
 
 
 def merge_source_schema_candidates(candidates: Iterable[SourceSchemaSpec]) -> SourceSchemaSpec:
@@ -68,7 +69,8 @@ class _FieldCluster:
             return True
         return self._has_strong_alias_overlap(current, other)
 
-    def _has_strong_alias_overlap(self, current: SourceFieldSpec, other: SourceFieldSpec) -> bool:
+    @staticmethod
+    def _has_strong_alias_overlap(current: SourceFieldSpec, other: SourceFieldSpec) -> bool:
         """Return whether the fields share alias evidence beyond semantic labels.
 
         `semantic_name` is a hint about meaning, not a stable identity on its own.
@@ -91,7 +93,7 @@ class _FieldCluster:
         """
 
         field = self.build_field()
-        return (field.semantic_name, field.path)
+        return field.semantic_name, field.path
 
     def build_field(self) -> SourceFieldSpec:
         """Build the merged field view for this cluster.
@@ -103,7 +105,9 @@ class _FieldCluster:
         paths = Counter(field.path for field in self.fields)
         semantic_names = Counter(field.semantic_name for field in self.fields)
         dtypes = Counter(field.dtype for field in self.fields)
-        cardinalities = Counter(field.cardinality for field in self.fields)
+        cardinalities: Counter[Literal["one", "many"]] = Counter(
+            field.cardinality for field in self.fields
+        )
         descriptions = [field.description for field in self.fields if field.description]
         units = Counter(field.unit for field in self.fields if field.unit)
         nullable = any(field.nullable for field in self.fields)
@@ -125,20 +129,18 @@ class _FieldCluster:
         )
 
 
-def _pick_counter_value(counter: Counter[str | None]) -> str:
+def _pick_counter_value(counter: Counter[CounterValueT]) -> CounterValueT:
     """Select the most frequent counter value with deterministic tie-breaking.
 
     Args:
         counter: Counter whose most stable value should be selected.
 
     Returns:
-        Most frequent non-null counter value after deterministic tie-breaking.
+        Most frequent counter value after deterministic tie-breaking.
     """
 
     ranked = sorted(counter.items(), key=lambda item: (-item[1], str(item[0])))
     value = ranked[0][0]
-    if value is None:
-        raise ValueError("expected a non-null counter value")
     return value
 
 

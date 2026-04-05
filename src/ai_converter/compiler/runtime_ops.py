@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 import copy
 import operator
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 DROP_SENTINEL = object()
@@ -405,7 +405,7 @@ def _resolve_segments(current: Any, segments: list[str]) -> Any:
 class _SafeExpressionEvaluator(ast.NodeVisitor):
     """Evaluate a limited AST with an explicit allowlist of operations."""
 
-    _binary_operators = {
+    _binary_operators: dict[type[ast.operator], Callable[[Any, Any], Any]] = {
         ast.Add: operator.add,
         ast.Sub: operator.sub,
         ast.Mult: operator.mul,
@@ -413,12 +413,12 @@ class _SafeExpressionEvaluator(ast.NodeVisitor):
         ast.FloorDiv: operator.floordiv,
         ast.Mod: operator.mod,
     }
-    _unary_operators = {
+    _unary_operators: dict[type[ast.unaryop], Callable[[Any], Any]] = {
         ast.Not: operator.not_,
         ast.UAdd: operator.pos,
         ast.USub: operator.neg,
     }
-    _comparison_operators = {
+    _comparison_operators: dict[type[ast.cmpop], Callable[[Any, Any], Any]] = {
         ast.Eq: operator.eq,
         ast.NotEq: operator.ne,
         ast.Gt: operator.gt,
@@ -511,10 +511,11 @@ class _SafeExpressionEvaluator(ast.NodeVisitor):
             The arithmetic result.
         """
 
-        operator_type = type(node.op)
-        if operator_type not in self._binary_operators:
+        operator_type: type[ast.operator] = type(node.op)
+        operation = self._binary_operators.get(operator_type)
+        if operation is None:
             raise UnsafeExpressionError("unsupported binary operator")
-        return self._binary_operators[operator_type](self.visit(node.left), self.visit(node.right))
+        return operation(self.visit(node.left), self.visit(node.right))
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> Any:
         """Evaluate a unary expression.
@@ -526,10 +527,11 @@ class _SafeExpressionEvaluator(ast.NodeVisitor):
             The unary-expression result.
         """
 
-        operator_type = type(node.op)
-        if operator_type not in self._unary_operators:
+        operator_type: type[ast.unaryop] = type(node.op)
+        operation = self._unary_operators.get(operator_type)
+        if operation is None:
             raise UnsafeExpressionError("unsupported unary operator")
-        return self._unary_operators[operator_type](self.visit(node.operand))
+        return operation(self.visit(node.operand))
 
     def visit_Compare(self, node: ast.Compare) -> Any:
         """Evaluate a chained comparison expression.
@@ -544,10 +546,11 @@ class _SafeExpressionEvaluator(ast.NodeVisitor):
         left = self.visit(node.left)
         for comparator, operator_node in zip(node.comparators, node.ops, strict=True):
             right = self.visit(comparator)
-            operator_type = type(operator_node)
-            if operator_type not in self._comparison_operators:
+            operator_type: type[ast.cmpop] = type(operator_node)
+            operation = self._comparison_operators.get(operator_type)
+            if operation is None:
                 raise UnsafeExpressionError("unsupported comparison operator")
-            if not self._comparison_operators[operator_type](left, right):
+            if not operation(left, right):
                 return False
             left = right
         return True

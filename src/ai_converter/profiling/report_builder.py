@@ -12,6 +12,7 @@ from .json_profiler import flatten_json_record
 from .loaders import LoadedDataset, LoadedInput, load_dataset
 from .models import DatasetMetadata, FieldProfile, ObservedTypeCount, ProfileReport, ScalarSummary, SourceInfo, ValueCount
 from .sampling import select_representative_samples
+from .type_labels import python_value_type_label
 
 
 def build_profile_report(path_or_input: str | Path | LoadedInput, *, sample_limit: int = 3) -> ProfileReport:
@@ -121,7 +122,7 @@ def _build_field_profiles(
                 continue
             present_count += 1
             for value in values:
-                type_name = _type_name(value)
+                type_name = python_value_type_label(value)
                 observed_types[type_name] += 1
                 sample_values.add(_stable_repr(value))
                 if value is None:
@@ -192,31 +193,6 @@ def _top_values(counter: Counter[str]) -> list[ValueCount]:
         ValueCount(value=value, count=count)
         for value, count in sorted(counter.items(), key=lambda item: (-item[1], item[0]))[:5]
     ]
-
-
-def _type_name(value: Any) -> str:
-    """Return the normalized profiling type label for a Python value.
-
-    Args:
-        value: Python value observed in a flattened record.
-
-    Returns:
-        Normalized profiling type label for the value.
-    """
-
-    if value is None:
-        return "null"
-    if isinstance(value, bool):
-        return "bool"
-    if isinstance(value, int) and not isinstance(value, bool):
-        return "int"
-    if isinstance(value, float):
-        return "float"
-    if isinstance(value, list):
-        return "list"
-    if isinstance(value, dict):
-        return "object"
-    return "str"
 
 
 def _stable_repr(value: Any) -> str:

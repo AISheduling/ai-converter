@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from .models import (
     ConditionClause,
     MappingIR,
@@ -13,6 +15,10 @@ from .models import (
 )
 from .ranker import RankedCandidate, evaluate_candidate, rank_mapping_candidates, select_best_candidate
 from .validator import MappingIRValidator, ValidationIssue, ValidationResult, flatten_target_paths
+
+if TYPE_CHECKING:
+    from .repair import RepairCase, build_repair_prompt
+    from .synthesizer import MappingCandidateRecord, MappingSynthesizer, MappingSynthesisResult
 
 __all__ = [
     "ConditionClause",
@@ -38,7 +44,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Resolve heavier exports lazily to avoid package import cycles.
 
     Args:
@@ -69,3 +75,9 @@ def __getattr__(name: str):
         }
         return values[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    """Return stable module exports for interactive and inspection tooling."""
+
+    return sorted(set(globals()) | set(__all__))

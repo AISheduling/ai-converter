@@ -234,7 +234,7 @@ def _ensure_at_least_one_sample(
 
     Returns:
         Adjusted bundle that keeps at least one sample when the budget allows it.
-        Otherwise the current in-budget bundle is returned unchanged.
+        Otherwise, the current in-budget bundle is returned unchanged.
     """
 
     for sample in samples:

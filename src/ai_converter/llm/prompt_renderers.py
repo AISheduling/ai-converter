@@ -12,7 +12,12 @@ from pydantic import BaseModel
 
 from ai_converter.mapping_ir.models import MappingIR, SUPPORTED_OPERATION_KINDS
 from ai_converter.profiling.models import ProfileReport
-from ai_converter.schema import SourceSchemaSpec, TargetSchemaCard, pack_profile_evidence
+from ai_converter.schema import (
+    EvidencePackMode,
+    SourceSchemaSpec,
+    TargetSchemaCard,
+    pack_profile_evidence,
+)
 
 from .protocol import PromptEnvelope, PromptTemplateReference
 
@@ -91,7 +96,7 @@ def render_source_schema_prompt(
     report: ProfileReport,
     *,
     budget: int = 1800,
-    mode: str = "balanced",
+    mode: EvidencePackMode = "balanced",
     format_hint: str | None = None,
     version: str = "v1",
 ) -> PromptEnvelope:

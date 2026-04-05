@@ -191,8 +191,8 @@ class MappingIRValidator:
 
         return issues
 
+    @staticmethod
     def _validate_operation_arguments(
-        self,
         operation: StepOperation,
         *,
         location: str,
@@ -363,7 +363,8 @@ class MappingIRValidator:
             )
         return issues
 
-    def _validate_assignment_conflicts(self, program: MappingIR) -> list[ValidationIssue]:
+    @staticmethod
+    def _validate_assignment_conflicts(program: MappingIR) -> list[ValidationIssue]:
         """Validate conflicting writes across target assignments.
 
         Args:
@@ -406,8 +407,8 @@ class MappingIRValidator:
                 )
         return issues
 
+    @staticmethod
     def _validate_conditions(
-        self,
         program: MappingIR,
         *,
         source_ids: set[str],
@@ -440,7 +441,8 @@ class MappingIRValidator:
                     )
         return issues
 
-    def _validate_cycles(self, program: MappingIR) -> list[ValidationIssue]:
+    @staticmethod
+    def _validate_cycles(program: MappingIR) -> list[ValidationIssue]:
         """Validate that step dependencies are acyclic.
 
         Args:
@@ -458,35 +460,36 @@ class MappingIRValidator:
         visited: set[str] = set()
         issues: list[ValidationIssue] = []
 
-        def visit(node: str) -> None:
+        def visit(step_id: str) -> None:
             """Walk one dependency node while tracking active recursion state.
 
             Args:
-                node: Step id currently being visited in the dependency graph.
+                step_id: Step id currently being visited in the dependency graph.
             """
 
-            if node in visited or node in visiting:
+            if step_id in visited or step_id in visiting:
                 return
-            visiting.add(node)
-            for neighbor in dependencies.get(node, []):
+            visiting.add(step_id)
+            for neighbor in dependencies.get(step_id, []):
                 if neighbor in visiting:
                     issues.append(
                         ValidationIssue(
                             code="cyclic_dependency",
-                            message=f"dependency cycle detected between '{node}' and '{neighbor}'",
-                            location=f"steps.{node}",
+                            message=f"dependency cycle detected between '{step_id}' and '{neighbor}'",
+                            location=f"steps.{step_id}",
                         )
                     )
                     continue
                 visit(neighbor)
-            visiting.remove(node)
-            visited.add(node)
+            visiting.remove(step_id)
+            visited.add(step_id)
 
-        for node in dependencies:
-            visit(node)
+        for step_id in dependencies:
+            visit(step_id)
         return issues
 
-    def _source_refs_for_operation(self, operation: StepOperation) -> list[str]:
+    @staticmethod
+    def _source_refs_for_operation(operation: StepOperation) -> list[str]:
         """Collect source reference ids used by one operation.
 
         Args:

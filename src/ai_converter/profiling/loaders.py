@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -89,7 +90,8 @@ def _load_csv(path: Path) -> LoadedDataset:
         if reader.fieldnames is None:
             raise ValueError("CSV source must contain a header row")
 
-        normalized_headers = _normalized_csv_headers(reader.fieldnames)
+        fieldnames = list(reader.fieldnames)
+        normalized_headers = _normalized_csv_headers(fieldnames)
         normalized_fieldnames = [normalized for normalized, _ in normalized_headers]
         original_names = {
             normalized: {original}
@@ -99,7 +101,7 @@ def _load_csv(path: Path) -> LoadedDataset:
         records: list[dict[str, Any]] = []
         for row in reader:
             normalized_row: dict[str, Any] = {}
-            for original, normalized in zip(reader.fieldnames, normalized_fieldnames, strict=True):
+            for original, normalized in zip(fieldnames, normalized_fieldnames, strict=True):
                 value = row.get(original)
                 normalized_row[normalized] = None if value == "" else value
             records.append(normalized_row)
@@ -114,7 +116,7 @@ def _load_csv(path: Path) -> LoadedDataset:
     )
 
 
-def _normalized_csv_headers(fieldnames: list[str]) -> list[tuple[str, str]]:
+def _normalized_csv_headers(fieldnames: Sequence[str]) -> list[tuple[str, str]]:
     """Return normalized CSV header pairs, rejecting collisions up front.
 
     Args:
