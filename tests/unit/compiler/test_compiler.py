@@ -215,7 +215,7 @@ def _program() -> MappingIR:
     """Build a deterministic MappingIR program used by compiler tests.
 
     Returns:
-        MappingIR program covering the key TASK-04 runtime helpers.
+        MappingIR program covering the key compiler runtime helpers.
     """
 
     return MappingIR(

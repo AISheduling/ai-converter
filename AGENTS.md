@@ -28,26 +28,26 @@ Installed workflow agents:
 - `.codex/agents/task-fixer.toml`
 <!-- repo-task-proof-loop:end -->
 
-## TASK-01 Notes
+## Profiling Notes
 
 - Profiling code lives under `src/llm_converter/profiling/`.
 - Profiling fixtures live under `tests/fixtures/profiling/`.
 - Focused profiling tests live under `tests/unit/profiling/`.
-- Preferred verification command for TASK-01 is `python -m pytest tests/unit/profiling -q -p no:cacheprovider`.
-- Treat `dsl-core/` as an external L1 reference library during TASK-01; do not modify it while changing the profiling layer.
+- Preferred profiling verification command is `python -m pytest tests/unit/profiling -q -p no:cacheprovider`.
+- Treat `dsl-core/` as an external L1 reference library during profiling work; do not modify it while changing the profiling layer.
 
-## TASK-03 Notes
+## LLM Adapter And Mapping IR Notes
 
 - LLM adapter code lives under `src/ai_converter/llm/`.
 - Concrete OpenAI adapter lives in `src/ai_converter/llm/openai_adapter.py`.
 - Mapping IR code lives under `src/ai_converter/mapping_ir/`.
 - Versioned prompt templates live under `prompts/source_schema/`, `prompts/mapping_ir/`, and `prompts/repair/`.
 - Focused mapping-ir tests live under `tests/unit/mapping_ir/`.
-- Preferred verification command for TASK-03 is `python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider`.
+- Preferred mapping-ir verification command is `python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider`.
 - Use fake or injected adapters in unit tests; do not call live models or the network.
 - Prompt/model trace artifacts are caller-managed exports from the shared `LLMResponse.to_trace_artifact()` contract; tests must keep them offline and deterministic.
 
-## TASK-04 Notes
+## Compiler And Validation Notes
 
 - Compiler code lives under `src/ai_converter/compiler/`.
 - Validation and acceptance code lives under `src/ai_converter/validation/`.
@@ -55,37 +55,37 @@ Installed workflow agents:
 - Focused compiler tests live under `tests/unit/compiler/`.
 - Focused validation tests live under `tests/unit/validation/`.
 - Smoke integration tests live under `tests/integration/converter_pipeline/`.
-- Preferred verification command for TASK-04 is `python -m pytest tests/unit/mapping_ir tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider`.
+- Preferred compiler/validation verification command is `python -m pytest tests/unit/mapping_ir tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider`.
 - Keep runtime compilation and repair-loop tests offline; use fake repair strategies and avoid live LLM calls or network access.
 - Acceptance reports stay JSON-exportable through `AcceptanceReport.to_trace_artifact()`, and repair-loop audit exports now include per-attempt traces plus a final decision through `RepairLoopResult.to_trace_artifact()`.
 
-## TASK-05 Notes
+## Drift And Evaluation Notes
 
 - Drift detection code lives under `src/llm_converter/drift/`.
 - Benchmark and reporting code lives under `src/llm_converter/evaluation/`.
 - Drift fixtures live under `tests/fixtures/drift/`.
-- Focused TASK-05 tests live under `tests/unit/drift/` and `tests/unit/evaluation/`.
+- Focused drift and evaluation tests live under `tests/unit/drift/` and `tests/unit/evaluation/`.
 - Benchmark protocol docs live under `docs/evaluation/benchmark_protocol.md`.
 - Example benchmark configs live under `examples/`.
-- Preferred verification command for TASK-05 is `python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider`.
+- Preferred drift/evaluation verification command is `python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider`.
 - Keep drift heuristics, patch application, and benchmark/reporting tests offline; use fake or deterministic converters and do not call live models or the network.
 
 ## Project Notes
 
-- `TASK-01` creates the initial profiling layer under `src/llm_converter/profiling/`.
+- The profiling layer lives under `src/llm_converter/profiling/`.
 - Keep `dsl-core/` read-only for now; it is treated as an external reference library and example corpus.
 - Focused profiling fixtures live in `tests/fixtures/profiling/`.
 - Focused profiling tests run with `pytest tests/unit/profiling -q`.
-- `TASK-02` adds schema contracts under `src/llm_converter/schema/`.
+- Schema contracts live under `src/llm_converter/schema/`.
 - Schema fixtures live under `tests/fixtures/schema/`.
 - Focused schema tests run with `python -m pytest tests/unit/schema -q -p no:cacheprovider`.
-- `TASK-03` adds the offline LLM adapter layer and MappingIR contracts under `src/llm_converter/llm/` and `src/llm_converter/mapping_ir/`.
-- Prompt templates for `TASK-03` live under `prompts/`.
+- The offline LLM adapter layer and MappingIR contracts live under `src/llm_converter/llm/` and `src/llm_converter/mapping_ir/`.
+- Prompt templates for the mapping pipeline live under `prompts/`.
 - Focused mapping-ir tests run with `python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider`.
-- `TASK-04` adds deterministic execution under `src/llm_converter/compiler/` and acceptance validation under `src/llm_converter/validation/`.
-- Focused TASK-04 tests run with `python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider`.
-- `TASK-05` adds deterministic drift detection and benchmark evaluation under `src/llm_converter/drift/` and `src/llm_converter/evaluation/`.
-- Focused TASK-05 tests run with `python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider`.
+- Deterministic execution and acceptance validation live under `src/llm_converter/compiler/` and `src/llm_converter/validation/`.
+- Focused compiler/validation tests run with `python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider`.
+- Deterministic drift detection and benchmark evaluation live under `src/llm_converter/drift/` and `src/llm_converter/evaluation/`.
+- Focused drift/evaluation tests run with `python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider`.
 - Benchmark examples live under `examples/`, and benchmark protocol docs live under `docs/evaluation/`.
 - `tests/integration/converter_pipeline/` may reuse deterministic profiling fixtures or local inline models, but must stay offline and must not modify `dsl-core/`.
 - Do not modify `dsl-core/` while building `TargetSchemaCard`; use it only as the external L1 reference surface.

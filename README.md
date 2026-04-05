@@ -129,7 +129,7 @@ print(card.fields[0].description)
 
 ## Use The Mapping IR API
 
-`TASK-03` adds an offline LLM-facing layer under `src/ai_converter/llm/` and `src/ai_converter/mapping_ir/`.
+The offline LLM-facing layer lives under `src/ai_converter/llm/` and `src/ai_converter/mapping_ir/`.
 
 It helps you:
 
@@ -238,7 +238,7 @@ Every shared adapter response now exposes `response.to_trace_artifact()` so call
 
 ## Use The Compiler And Validation API
 
-`TASK-04` adds deterministic execution under `src/ai_converter/compiler/` and `src/ai_converter/validation/`.
+Deterministic execution lives under `src/ai_converter/compiler/` and `src/ai_converter/validation/`.
 
 It helps you:
 
@@ -291,7 +291,7 @@ failed attempt, its failure bundle, and the patch or stop outcome deterministica
 
 ## Use The Drift And Evaluation APIs
 
-`TASK-05` adds deterministic drift handling under `src/llm_converter/drift/` and reproducible benchmark helpers under `src/llm_converter/evaluation/`.
+Deterministic drift handling lives under `src/llm_converter/drift/` and reproducible benchmark helpers under `src/llm_converter/evaluation/`.
 
 It helps you:
 
@@ -409,7 +409,7 @@ artifacts. If you need timing diagnostics, call
 - `docs/architecture/schema_contracts.md` documents the schema contract layer
 - `docs/prompts/mapping_ir.md` documents the MappingIR prompt layer
 - `docs/architecture/compiler_and_validation.md` documents the execution and validation design
-- `docs/evaluation/benchmark_protocol.md` documents the TASK-05 benchmark workflow
+- `docs/evaluation/benchmark_protocol.md` documents the benchmark and evaluation workflow
 - `examples/benchmark_config.json` shows an illustrative benchmark layout
 
 ## Project Notes

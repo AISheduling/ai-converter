@@ -1,6 +1,6 @@
 ## Benchmark Protocol
 
-`TASK-05` adds a deterministic benchmark layer under `src/ai_converter/evaluation/`.
+The deterministic benchmark layer lives under `src/ai_converter/evaluation/`.
 
 The benchmark harness is intentionally library-first. It does not require a CLI or any network access.
 

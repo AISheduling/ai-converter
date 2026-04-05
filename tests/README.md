@@ -18,7 +18,7 @@ Run all commands from the repository root:
 
 ## Focused Test Suites
 
-### TASK-01 profiling
+### Profiling
 
 Fixtures:
 
@@ -34,7 +34,7 @@ Command:
 python -m pytest tests/unit/profiling -q -p no:cacheprovider
 ```
 
-### TASK-02 schema contracts
+### Schema contracts
 
 Fixtures:
 
@@ -50,7 +50,7 @@ Command:
 python -m pytest tests/unit/schema -q -p no:cacheprovider
 ```
 
-### TASK-03 mapping ir
+### Mapping IR
 
 Fixtures:
 
@@ -68,7 +68,7 @@ Command:
 python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider
 ```
 
-### TASK-04 compiler and validation
+### Compiler and validation
 
 Tests:
 
@@ -92,7 +92,7 @@ Command:
 python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider
 ```
 
-### TASK-05 drift and evaluation
+### Drift and evaluation
 
 Fixtures:
 
@@ -155,10 +155,10 @@ poetry run python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cach
 - `tests/unit/` contains focused unit suites
 - `tests/integration/` contains smoke integration suites for compiled execution and validation
 - `tests/fixtures/` contains deterministic input data used by tests
-- `tests/fixtures/drift/` contains synthetic baseline and drifted source payloads for TASK-05
+- `tests/fixtures/drift/` contains synthetic baseline and drifted source payloads for drift and evaluation tests
 
 ## Notes
 
 - `dsl-core/` is external reference code and should not be modified while working on profiling or schema tests.
-- TASK-05 benchmark tests should keep report output inside repo-local writable paths when temporary artifacts are needed.
+- Benchmark tests should keep report output inside repo-local writable paths when temporary artifacts are needed.
 - If you only change documentation, running tests is optional.

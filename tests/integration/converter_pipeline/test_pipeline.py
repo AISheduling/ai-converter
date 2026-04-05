@@ -18,7 +18,7 @@ PROFILE_FIXTURES = ROOT / "tests" / "fixtures" / "profiling"
 
 
 class ScheduleSummary(BaseModel):
-    """Simple integration target model for the TASK-04 smoke test."""
+    """Simple integration target model for the compiler/validation smoke test."""
 
     project_name: str
     priority: int

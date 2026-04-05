@@ -1,6 +1,6 @@
 # Compiler And Validation
 
-`TASK-04` adds the deterministic execution layer that turns a validated `MappingIR` program into a versioned `ConverterPackage` artifact and then validates the produced payload offline.
+The compiler and validation layer turns a validated `MappingIR` program into a versioned `ConverterPackage` artifact and then validates the produced payload offline.
 
 ## Flow
 
@@ -43,7 +43,7 @@ In addition, it exposes:
 
 ## Runtime Helpers
 
-The runtime layer currently covers the operation surface required by `TASK-04`:
+The runtime layer currently covers the operation surface required by the compiler/validation pipeline:
 
 - `copy` and `rename`
 - `cast`
@@ -90,7 +90,7 @@ The result now also records:
 - per-attempt linkage between the failing program, failure bundle, acceptance report, and patched program when a patch is proposed
 - `RepairLoopResult.to_trace_artifact()` for one stable JSON-compatible export of the full repair trace
 
-In `TASK-04`, repair strategies are fake or stubbed in tests; live LLM repair is intentionally out of scope.
+In this layer, repair strategies are fake or stubbed in tests; live LLM repair is intentionally out of scope.
 
 ## Minimal usage
 

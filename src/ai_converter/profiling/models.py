@@ -73,7 +73,7 @@ class DatasetMetadata(BaseModel):
 
 
 class ProfileReport(BaseModel):
-    """Canonical profiling output for TASK-01."""
+    """Canonical profiling output."""
 
     source: SourceInfo
     record_count: int = Field(ge=0)
@@ -84,7 +84,7 @@ class ProfileReport(BaseModel):
 
     @property
     def fields(self) -> list[FieldProfile]:
-        """Compatibility alias for TASK-01 report consumers.
+        """Compatibility alias for profiling report consumers.
 
         Returns:
             Field profiles from the canonical report payload.
@@ -94,7 +94,7 @@ class ProfileReport(BaseModel):
 
     @property
     def fingerprint(self) -> str:
-        """Compatibility alias for TASK-01 report consumers.
+        """Compatibility alias for profiling report consumers.
 
         Returns:
             Stable schema fingerprint for the report.

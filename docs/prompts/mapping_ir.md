@@ -1,6 +1,6 @@
 # MappingIR prompts
 
-`TASK-03` adds a file-backed prompt layer under `prompts/` for the offline synthesis pipeline.
+The offline synthesis pipeline uses a file-backed prompt layer under `prompts/`.
 
 ## Template layout
 

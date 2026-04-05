@@ -20,14 +20,14 @@ from ai_converter.validation import (
 
 
 class DemoTask(BaseModel):
-    """Target task model used by TASK-04 validation tests."""
+    """Target task model used by validation tests."""
 
     id: str
     name: str
 
 
 class DemoTarget(BaseModel):
-    """Target root model used by TASK-04 validation tests."""
+    """Target root model used by validation tests."""
 
     task: DemoTask
     status: str = Field(description="Normalized task status")

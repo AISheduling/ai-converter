@@ -151,7 +151,7 @@ def classify_drift(
 
     overall = _overall_classification(field_drifts)
     if overall == "no_change":
-        notes.append("Baseline and candidate profiles are structurally equivalent for TASK-05 purposes.")
+        notes.append("Baseline and candidate profiles are structurally equivalent for drift comparison purposes.")
     elif overall == "rename_compatible":
         notes.append("All detected drift can be explained by compatible renames and additive fields.")
     elif overall == "additive_compatible":

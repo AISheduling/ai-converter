@@ -1,6 +1,6 @@
 ## Profiling Flow
 
-`TASK-01` introduces a deterministic profiling layer that turns raw `L0` schedule descriptions into one canonical `ProfileReport`.
+The profiling layer turns raw `L0` schedule descriptions into one canonical `ProfileReport`.
 
 The flow is:
 

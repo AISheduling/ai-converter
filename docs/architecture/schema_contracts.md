@@ -1,8 +1,8 @@
-"""Architecture notes for TASK-02 schema contracts."""
+"""Architecture notes for schema contracts."""
 
 # Schema Contracts
 
-`TASK-02` adds a schema-first bridge between profiling outputs and future LLM-driven synthesis steps.
+Schema contracts add a schema-first bridge between profiling outputs and future LLM-driven synthesis steps.
 
 ## Package layout
 
@@ -23,7 +23,7 @@
 
 ## Minimal flow
 
-The normal TASK-02 handoff looks like this:
+The normal schema-contract handoff looks like this:
 
 1. Start from a deterministic `ProfileReport`.
 2. Normalize or merge source-side fields into one `SourceSchemaSpec`.
@@ -52,7 +52,7 @@ print(bundle.summary.field_count)
 
 ## Focused verification
 
-Run the TASK-02 focused test suite with:
+Run the schema-focused test suite with:
 
 ```bash
 python -m pytest tests/unit/schema -q -p no:cacheprovider
