@@ -124,7 +124,10 @@ def test_evidence_packer_keeps_high_value_paths() -> None:
 def test_source_spec_aggregator_merges_aliases_and_confidence() -> None:
     """Verify that candidate aggregation merges aliases and confidence."""
 
-    candidates = [SourceSchemaSpec.model_validate(item) for item in json.loads((SCHEMA_FIXTURES / "source_candidates.json").read_text(encoding="utf-8"))]
+    candidates = [
+        SourceSchemaSpec.model_validate(item)
+        for item in json.loads((SCHEMA_FIXTURES / "source_candidates.json").read_text(encoding="utf-8"))
+    ]
     assert all(candidate.version == SOURCE_SCHEMA_SPEC_VERSION for candidate in candidates)
 
     merged = merge_source_schema_candidates(candidates)
@@ -135,6 +138,44 @@ def test_source_spec_aggregator_merges_aliases_and_confidence() -> None:
     assert field.aliases == ["task_name", "taskname"]
     assert field.examples == ["Execution", "Planning"]
     assert field.confidence == 0.8
+
+
+def test_source_spec_aggregator_keeps_distinct_fields_when_only_semantic_name_matches() -> None:
+    """Verify that semantic-name-only overlap does not merge unrelated paths."""
+
+    candidates = [
+        SourceSchemaSpec(
+            source_name="candidate-a",
+            source_format="json",
+            root_type="object",
+            fields=[
+                SourceFieldSpec(
+                    path="project.name",
+                    semantic_name="name",
+                    dtype="str",
+                    aliases=["project_name"],
+                )
+            ],
+        ),
+        SourceSchemaSpec(
+            source_name="candidate-b",
+            source_format="json",
+            root_type="object",
+            fields=[
+                SourceFieldSpec(
+                    path="owner.name",
+                    semantic_name="name",
+                    dtype="str",
+                    aliases=["owner_name"],
+                )
+            ],
+        ),
+    ]
+
+    merged = merge_source_schema_candidates(candidates)
+
+    assert [field.path for field in merged.fields] == ["owner.name", "project.name"]
+    assert [field.aliases for field in merged.fields] == [["name", "owner_name"], ["name", "project_name"]]
 
 
 def test_source_schema_spec_parses_legacy_payload_without_version() -> None:

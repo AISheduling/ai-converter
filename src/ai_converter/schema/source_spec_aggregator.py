@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+import re
 from typing import Iterable
 
 from .source_spec_models import SourceFieldSpec, SourceSchemaSpec
 from .source_spec_normalizer import normalize_source_schema_spec
+
+_TOKEN_PATTERN = re.compile(r"[^a-z0-9]+")
 
 
 def merge_source_schema_candidates(candidates: Iterable[SourceSchemaSpec]) -> SourceSchemaSpec:
@@ -63,9 +66,22 @@ class _FieldCluster:
         current = self.build_field()
         if current.path == other.path:
             return True
-        if current.semantic_name == other.semantic_name:
-            return True
-        return bool(set(current.aliases) & set(other.aliases))
+        return self._has_strong_alias_overlap(current, other)
+
+    def _has_strong_alias_overlap(self, current: SourceFieldSpec, other: SourceFieldSpec) -> bool:
+        """Return whether the fields share alias evidence beyond semantic labels.
+
+        `semantic_name` is a hint about meaning, not a stable identity on its own.
+        When two paths differ, only stronger alias overlap should merge them.
+        """
+
+        shared_aliases = set(current.aliases) & set(other.aliases)
+        weak_aliases = {current.semantic_name, other.semantic_name}
+        current_leaf = _canonical_path_leaf(current.path)
+        other_leaf = _canonical_path_leaf(other.path)
+        if current_leaf == other_leaf:
+            weak_aliases.add(current_leaf)
+        return bool(shared_aliases - weak_aliases)
 
     def sort_key(self) -> tuple[str, str]:
         """Return deterministic sorting key for the merged field.
@@ -124,3 +140,11 @@ def _pick_counter_value(counter: Counter[str | None]) -> str:
     if value is None:
         raise ValueError("expected a non-null counter value")
     return value
+
+
+def _canonical_path_leaf(path: str) -> str:
+    """Return the canonical terminal token for a source path."""
+
+    leaf = path.split(".")[-1].replace("[]", "")
+    collapsed = _TOKEN_PATTERN.sub("_", leaf.strip().lower())
+    return collapsed.strip("_")
