@@ -6,7 +6,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from ai_converter.llm.prompt_renderers import render_mapping_ir_prompt, render_source_schema_prompt
-from ai_converter.llm.protocol import LLMAdapter, LLMResponse
+from ai_converter.llm.protocol import (
+    LLMAdapter,
+    LLMCallBudgetLedger,
+    LLMCallBudgetPolicy,
+    LLMCallBudgetSnapshot,
+    LLMCallBudgetStage,
+    LLMResponse,
+)
 from ai_converter.profiling.models import ProfileReport
 from ai_converter.schema import SourceSchemaSpec, TargetSchemaCard
 
@@ -38,22 +45,32 @@ class MappingSynthesisResult:
         candidates: Candidate records evaluated during synthesis.
         best_candidate: Best ranked mapping candidate, or ``None`` if unavailable.
         best_index: Zero-based index of the selected candidate, if any.
+        budget_accounting: Shared LLM call-budget snapshot after synthesis.
     """
 
     candidates: list[MappingCandidateRecord]
     best_candidate: MappingIR | None
     best_index: int | None
+    budget_accounting: LLMCallBudgetSnapshot | None = None
 
 
 class MappingSynthesizer:
     """Run fake- or real-backed synthesis for source schemas and MappingIR."""
 
-    def __init__(self, adapter: LLMAdapter, *, validator: MappingIRValidator | None = None) -> None:
+    def __init__(
+        self,
+        adapter: LLMAdapter,
+        *,
+        validator: MappingIRValidator | None = None,
+        budget_policy: LLMCallBudgetPolicy | None = None,
+    ) -> None:
         """Initialize the synthesizer with an adapter and optional validator.
 
         Args:
             adapter: Adapter used for structured offline generation.
             validator: Optional validator reused across candidate ranking calls.
+            budget_policy: Optional shared LLM call-budget policy for schema,
+                mapping, and repair stages.
 
         Returns:
             None.
@@ -61,6 +78,20 @@ class MappingSynthesizer:
 
         self._adapter = adapter
         self._validator = validator or MappingIRValidator()
+        self._budget_ledger = LLMCallBudgetLedger(budget_policy) if budget_policy is not None else None
+
+    @property
+    def budget_accounting(self) -> LLMCallBudgetSnapshot | None:
+        """Return the current shared LLM call-budget snapshot.
+
+        Returns:
+            Shared budget snapshot when a budget policy is configured,
+            otherwise ``None``.
+        """
+
+        if self._budget_ledger is None:
+            return None
+        return self._budget_ledger.snapshot()
 
     def synthesize_source_schema(
         self,
@@ -93,7 +124,19 @@ class MappingSynthesizer:
             format_hint=format_hint,
             version=version,
         )
-        return self._adapter.generate_structured(prompt, schema=SourceSchemaSpec, metadata=metadata)
+        response = self._generate_structured(
+            prompt,
+            schema=SourceSchemaSpec,
+            stage="schema",
+            metadata=metadata,
+        )
+        snapshot = self.budget_accounting
+        if snapshot is not None:
+            response.metadata = {
+                **response.metadata,
+                "llm_call_budget": snapshot.to_dict(),
+            }
+        return response
 
     def synthesize_mapping(
         self,
@@ -128,9 +171,10 @@ class MappingSynthesizer:
 
         records: list[MappingCandidateRecord] = []
         for index in range(candidate_count):
-            response = self._adapter.generate_structured(
+            response = self._generate_structured(
                 prompt,
                 schema=MappingIR,
+                stage="mapping",
                 metadata={**dict(metadata or {}), "candidate_index": index},
             )
             validation = self._validation_for_response(
@@ -147,6 +191,37 @@ class MappingSynthesizer:
             candidates=ordered,
             best_candidate=best.ranked.candidate if best is not None else None,
             best_index=best.index if best is not None else None,
+            budget_accounting=self.budget_accounting,
+        )
+
+    def _generate_structured(
+        self,
+        prompt,
+        *,
+        schema,
+        stage: LLMCallBudgetStage,
+        metadata: dict[str, Any] | None,
+    ):
+        """Generate one structured response with optional shared budget checks.
+
+        Args:
+            prompt: Rendered prompt envelope for the request.
+            schema: Structured schema used to validate the response.
+            stage: Shared budget stage that should consume the call.
+            metadata: Optional deterministic request metadata.
+
+        Returns:
+            Structured adapter response for the requested schema.
+        """
+
+        if self._budget_ledger is None:
+            return self._adapter.generate_structured(prompt, schema=schema, metadata=metadata)
+        return self._budget_ledger.generate_structured(
+            self._adapter,
+            prompt,
+            schema=schema,
+            stage=stage,
+            metadata=metadata,
         )
 
     def _validation_for_response(

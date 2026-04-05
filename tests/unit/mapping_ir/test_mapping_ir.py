@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel, Field
 
 from ai_converter.llm import (
     FakeLLMAdapter,
+    LLMCallBudgetExceededError,
+    LLMCallBudgetPolicy,
+    LLMUsage,
     FakeLLMReply,
     PromptEnvelope,
     PromptTemplateReference,
@@ -138,6 +142,95 @@ def test_synthesizer_ranks_candidates_by_validity_and_coverage() -> None:
     assert result.best_candidate is not None
     assert {assignment.target_path for assignment in result.best_candidate.assignments} == {"status", "task.id", "task.name"}
     assert result.candidates[0].ranked.coverage_ratio > result.candidates[1].ranked.coverage_ratio
+
+
+def test_synthesizer_tracks_shared_llm_budget_across_schema_and_mapping() -> None:
+    """Verify that schema and mapping calls share one centralized budget ledger.
+
+    Returns:
+        None.
+    """
+
+    adapter = FakeLLMAdapter(
+        structured_replies=[
+            FakeLLMReply(
+                parsed_payload=_source_schema().model_dump(mode="json"),
+                usage=LLMUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+            ),
+            FakeLLMReply(
+                parsed_payload=_partial_candidate().model_dump(mode="json"),
+                usage=LLMUsage(prompt_tokens=12, completion_tokens=6, total_tokens=18),
+            ),
+            FakeLLMReply(
+                parsed_payload=_full_candidate().model_dump(mode="json"),
+                usage=LLMUsage(prompt_tokens=14, completion_tokens=7, total_tokens=21),
+            ),
+        ]
+    )
+    synthesizer = MappingSynthesizer(
+        adapter,
+        budget_policy=LLMCallBudgetPolicy(schema=1, mapping=2, repair=1),
+    )
+
+    schema_response = synthesizer.synthesize_source_schema(
+        build_profile_report(PROFILE_FIXTURES / "projects.json", sample_limit=2)
+    )
+    mapping_result = synthesizer.synthesize_mapping(
+        schema_response.parsed or _source_schema(),
+        _target_schema(),
+        candidate_count=2,
+    )
+
+    assert schema_response.ok is True
+    assert schema_response.metadata["llm_call_budget"]["total_used"] == 1
+    assert schema_response.metadata["llm_call_budget"]["stages"]["schema"]["used"] == 1
+    assert mapping_result.budget_accounting is not None
+    assert mapping_result.budget_accounting.total_limit == 4
+    assert mapping_result.budget_accounting.total_used == 3
+    assert mapping_result.budget_accounting.total_remaining == 1
+    assert mapping_result.budget_accounting.stages["schema"].used == 1
+    assert mapping_result.budget_accounting.stages["mapping"].used == 2
+    assert mapping_result.budget_accounting.stages["repair"].used == 0
+    assert [record.stage for record in mapping_result.budget_accounting.calls] == ["schema", "mapping", "mapping"]
+    assert [call.metadata.get("candidate_index") for call in adapter.calls[1:]] == [0, 1]
+
+
+def test_synthesizer_stops_before_exceeding_mapping_budget() -> None:
+    """Verify that mapping synthesis fails before making a budget-breaking call.
+
+    Returns:
+        None.
+    """
+
+    adapter = FakeLLMAdapter(
+        structured_replies=[
+            FakeLLMReply(parsed_payload=_partial_candidate().model_dump(mode="json")),
+            FakeLLMReply(parsed_payload=_full_candidate().model_dump(mode="json")),
+            FakeLLMReply(parsed_payload=_full_candidate().model_dump(mode="json")),
+        ]
+    )
+    synthesizer = MappingSynthesizer(
+        adapter,
+        budget_policy=LLMCallBudgetPolicy(schema=0, mapping=2, repair=0),
+    )
+
+    with pytest.raises(LLMCallBudgetExceededError) as exc_info:
+        synthesizer.synthesize_mapping(
+            _source_schema(),
+            _target_schema(),
+            candidate_count=3,
+        )
+
+    snapshot = exc_info.value.snapshot
+
+    assert exc_info.value.stage == "mapping"
+    assert len(adapter.calls) == 2
+    assert [call.metadata.get("candidate_index") for call in adapter.calls] == [0, 1]
+    assert snapshot.total_used == 2
+    assert snapshot.total_remaining == 0
+    assert snapshot.stages["mapping"].used == 2
+    assert snapshot.stages["mapping"].remaining == 0
+    assert [record.index for record in snapshot.calls] == [1, 2]
 
 
 def test_fake_llm_adapter_supports_structured_outputs() -> None:

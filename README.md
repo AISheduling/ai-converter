@@ -129,13 +129,14 @@ It helps you:
 - render versioned prompts from `ProfileReport`, `SourceSchemaSpec`, and `TargetSchemaCard`
 - validate `MappingIR` candidates before any runtime compilation exists
 - rank multiple fake-backed candidates by structural validity and target coverage
+- optionally enforce a centralized `schema` / `mapping` / `repair` LLM call budget with machine-readable accounting
 - build bounded repair prompts from failing fixtures
 - switch between `FakeLLMAdapter` for offline tests and `OpenAILLMAdapter` for real OpenAI-backed calls
 
 ### Example: rank fake-backed mapping candidates
 
 ```python
-from ai_converter.llm import FakeLLMAdapter, FakeLLMReply
+from ai_converter.llm import FakeLLMAdapter, FakeLLMReply, LLMCallBudgetPolicy
 from ai_converter.mapping_ir import MappingSynthesizer
 from ai_converter.schema.source_spec_models import SourceFieldSpec, SourceSchemaSpec
 from ai_converter.schema.target_card_builder import build_target_schema_card
@@ -183,7 +184,10 @@ adapter = FakeLLMAdapter(
     ]
 )
 
-result = MappingSynthesizer(adapter).synthesize_mapping(
+result = MappingSynthesizer(
+    adapter,
+    budget_policy=LLMCallBudgetPolicy(schema=0, mapping=1, repair=0),
+).synthesize_mapping(
     source_schema,
     target_schema,
     candidate_count=1,
@@ -191,6 +195,23 @@ result = MappingSynthesizer(adapter).synthesize_mapping(
 
 print(result.best_index)
 print(result.best_candidate.assignments[0].target_path)
+print(result.budget_accounting.total_used)
+```
+
+When a shared budget policy is configured, successful source-schema calls also expose the current machine-readable accounting in `schema_response.metadata["llm_call_budget"]`.
+If the next call would exceed the configured stage limit, the library raises `LLMCallBudgetExceededError` before making that extra adapter call, and `error.snapshot` contains the same per-stage accounting for diagnostics.
+
+```python
+from ai_converter.llm import LLMCallBudgetExceededError
+
+schema_response = synthesizer.synthesize_source_schema(report)
+print(schema_response.metadata["llm_call_budget"]["stages"]["schema"]["used"])
+
+try:
+    synthesizer.synthesize_mapping(source_schema, target_schema, candidate_count=3)
+except LLMCallBudgetExceededError as error:
+    print(error.stage)
+    print(error.snapshot.to_dict()["total_used"])
 ```
 
 ### Example: create a real OpenAI-backed adapter
