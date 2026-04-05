@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from llm_converter.mapping_ir import MappingIR, MappingStep
-from llm_converter.schema import SourceSchemaSpec
+from ai_converter.mapping_ir import MappingIR, MappingStep
+from ai_converter.schema import SourceSchemaSpec
 
 from .models import (
     AddSourceAliasOperation,

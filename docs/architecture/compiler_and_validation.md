@@ -76,9 +76,9 @@ Compile one mapping and validate the output with:
 ```python
 from pydantic import BaseModel
 
-from llm_converter.compiler import compile_mapping_ir
-from llm_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
-from llm_converter.validation import validate_structural_output
+from ai_converter.compiler import compile_mapping_ir
+from ai_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
+from ai_converter.validation import validate_structural_output
 
 
 class DemoTask(BaseModel):

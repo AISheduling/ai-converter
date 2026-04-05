@@ -6,8 +6,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from llm_converter.mapping_ir import SourceReference
-from llm_converter.schema import SourceFieldSpec
+from ai_converter.mapping_ir import SourceReference
+from ai_converter.schema import SourceFieldSpec
 
 DriftClassification = Literal[
     "no_change",

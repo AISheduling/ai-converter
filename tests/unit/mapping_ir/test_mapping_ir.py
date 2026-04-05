@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from llm_converter.llm import (
+from ai_converter.llm import (
     FakeLLMAdapter,
     FakeLLMReply,
     PromptEnvelope,
@@ -14,7 +14,7 @@ from llm_converter.llm import (
     render_mapping_ir_prompt,
     render_source_schema_prompt,
 )
-from llm_converter.mapping_ir import (
+from ai_converter.mapping_ir import (
     MappingIR,
     MappingIRValidator,
     MappingStep,
@@ -26,9 +26,9 @@ from llm_converter.mapping_ir import (
     build_repair_prompt,
     select_best_candidate,
 )
-from llm_converter.profiling.report_builder import build_profile_report
-from llm_converter.schema.source_spec_models import SourceFieldSpec, SourceSchemaSpec
-from llm_converter.schema.target_card_builder import build_target_schema_card
+from ai_converter.profiling.report_builder import build_profile_report
+from ai_converter.schema.source_spec_models import SourceFieldSpec, SourceSchemaSpec
+from ai_converter.schema.target_card_builder import build_target_schema_card
 
 
 ROOT = Path(__file__).resolve().parents[3]

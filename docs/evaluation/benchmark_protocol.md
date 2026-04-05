@@ -49,7 +49,7 @@ The helper returns the concrete output paths, and the exported files are typical
 ```python
 from pathlib import Path
 
-from llm_converter.evaluation import (
+from ai_converter.evaluation import (
     BenchmarkCase,
     BenchmarkScenario,
     BenchmarkSubject,

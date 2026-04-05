@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from llm_converter.llm import OpenAILLMAdapter, PromptEnvelope, PromptTemplateReference
+from ai_converter.llm import OpenAILLMAdapter, PromptEnvelope, PromptTemplateReference
 
 
 class DemoStructuredPayload(BaseModel):

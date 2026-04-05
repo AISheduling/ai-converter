@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from llm_converter.llm.prompt_renderers import render_mapping_ir_prompt, render_source_schema_prompt
-from llm_converter.llm.protocol import LLMAdapter, LLMResponse
-from llm_converter.profiling.models import ProfileReport
-from llm_converter.schema import SourceSchemaSpec, TargetSchemaCard
+from ai_converter.llm.prompt_renderers import render_mapping_ir_prompt, render_source_schema_prompt
+from ai_converter.llm.protocol import LLMAdapter, LLMResponse
+from ai_converter.profiling.models import ProfileReport
+from ai_converter.schema import SourceSchemaSpec, TargetSchemaCard
 
 from .models import MappingIR
 from .ranker import RankedCandidate, evaluate_candidate

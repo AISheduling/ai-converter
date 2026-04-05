@@ -7,7 +7,7 @@ from pprint import pformat
 from types import ModuleType
 from typing import Any
 
-from llm_converter.mapping_ir import MappingIR, MappingIRValidator, MappingStep, StepOperation
+from ai_converter.mapping_ir import MappingIR, MappingIRValidator, MappingStep, StepOperation
 
 from .module_loader import load_module_from_source
 

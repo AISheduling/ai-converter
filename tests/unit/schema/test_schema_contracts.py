@@ -6,12 +6,12 @@ import importlib.util
 import json
 from pathlib import Path
 
-from llm_converter.profiling.report_builder import build_profile_report
-from llm_converter.schema.evidence_packer import pack_profile_evidence
-from llm_converter.schema.source_spec_aggregator import merge_source_schema_candidates
-from llm_converter.schema.source_spec_models import SourceFieldSpec, SourceSchemaSpec
-from llm_converter.schema.source_spec_normalizer import normalize_source_schema_spec
-from llm_converter.schema.target_card_builder import build_target_schema_card
+from ai_converter.profiling.report_builder import build_profile_report
+from ai_converter.schema.evidence_packer import pack_profile_evidence
+from ai_converter.schema.source_spec_aggregator import merge_source_schema_candidates
+from ai_converter.schema.source_spec_models import SourceFieldSpec, SourceSchemaSpec
+from ai_converter.schema.source_spec_normalizer import normalize_source_schema_spec
+from ai_converter.schema.target_card_builder import build_target_schema_card
 
 
 ROOT = Path(__file__).resolve().parents[3]

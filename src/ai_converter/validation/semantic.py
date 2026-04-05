@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from llm_converter.compiler.runtime_ops import evaluate_expression, get_path_value
+from ai_converter.compiler.runtime_ops import evaluate_expression, get_path_value
 
 
 class SemanticAssertion(BaseModel):

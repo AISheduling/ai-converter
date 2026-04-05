@@ -6,8 +6,8 @@ from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from llm_converter.compiler import CompilationError, compile_mapping_ir
-from llm_converter.mapping_ir import MappingIR
+from ai_converter.compiler import CompilationError, compile_mapping_ir
+from ai_converter.mapping_ir import MappingIR
 
 from .acceptance import AcceptanceCase, AcceptanceReport, run_acceptance_suite
 

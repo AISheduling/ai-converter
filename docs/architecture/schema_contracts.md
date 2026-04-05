@@ -32,8 +32,8 @@ The normal TASK-02 handoff looks like this:
 ```python
 from pydantic import BaseModel, Field
 
-from llm_converter.profiling import build_profile_report
-from llm_converter.schema import build_target_schema_card, pack_profile_evidence
+from ai_converter.profiling import build_profile_report
+from ai_converter.schema import build_target_schema_card, pack_profile_evidence
 
 
 class DemoTask(BaseModel):

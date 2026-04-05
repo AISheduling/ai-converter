@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from llm_converter.drift import (
+from ai_converter.drift import (
     AddSourceAliasOperation,
     ConverterPatch,
     RetargetSourceRefOperation,
@@ -13,9 +13,9 @@ from llm_converter.drift import (
     classify_drift,
     propose_compatible_patch,
 )
-from llm_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
-from llm_converter.profiling import build_profile_report
-from llm_converter.schema import SourceFieldSpec, SourceSchemaSpec
+from ai_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
+from ai_converter.profiling import build_profile_report
+from ai_converter.schema import SourceFieldSpec, SourceSchemaSpec
 
 ROOT = Path(__file__).resolve().parents[3]
 DRIFT_FIXTURES = ROOT / "tests" / "fixtures" / "drift"

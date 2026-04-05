@@ -35,8 +35,8 @@ Prompt family selection is explicit: `render_source_schema_prompt(...)` loads `p
 ```python
 from pydantic import BaseModel
 
-from llm_converter.llm.prompt_renderers import render_mapping_ir_prompt
-from llm_converter.schema import SourceFieldSpec, SourceSchemaSpec, build_target_schema_card
+from ai_converter.llm.prompt_renderers import render_mapping_ir_prompt
+from ai_converter.schema import SourceFieldSpec, SourceSchemaSpec, build_target_schema_card
 
 
 class DemoTask(BaseModel):

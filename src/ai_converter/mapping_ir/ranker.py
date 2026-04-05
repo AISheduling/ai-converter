@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from typing import Iterable
 
-from llm_converter.schema import SourceSchemaSpec, TargetSchemaCard
+from ai_converter.schema import SourceSchemaSpec, TargetSchemaCard
 
 from .models import MappingIR
 from .validator import MappingIRValidator, ValidationResult, flatten_target_paths

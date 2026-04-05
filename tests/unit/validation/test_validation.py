@@ -6,9 +6,9 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 
-from llm_converter.compiler import compile_mapping_ir
-from llm_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
-from llm_converter.validation import (
+from ai_converter.compiler import compile_mapping_ir
+from ai_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
+from ai_converter.validation import (
     AcceptanceCase,
     SemanticAssertion,
     run_acceptance_suite,

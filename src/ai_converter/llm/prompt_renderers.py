@@ -10,9 +10,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from llm_converter.mapping_ir.models import MappingIR, SUPPORTED_OPERATION_KINDS
-from llm_converter.profiling.models import ProfileReport
-from llm_converter.schema import SourceSchemaSpec, TargetSchemaCard, pack_profile_evidence
+from ai_converter.mapping_ir.models import MappingIR, SUPPORTED_OPERATION_KINDS
+from ai_converter.profiling.models import ProfileReport
+from ai_converter.schema import SourceSchemaSpec, TargetSchemaCard, pack_profile_evidence
 
 from .protocol import PromptEnvelope, PromptTemplateReference
 

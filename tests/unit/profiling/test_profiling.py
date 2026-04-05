@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from llm_converter.profiling.csv_profiler import profile_csv
-from llm_converter.profiling.json_profiler import profile_json
-from llm_converter.profiling.loaders import LoadedInput
-from llm_converter.profiling.report_builder import build_profile_report
-from llm_converter.profiling.sampling import SamplingCandidate, select_representative_samples
+from ai_converter.profiling.csv_profiler import profile_csv
+from ai_converter.profiling.json_profiler import profile_json
+from ai_converter.profiling.loaders import LoadedInput
+from ai_converter.profiling.report_builder import build_profile_report
+from ai_converter.profiling.sampling import SamplingCandidate, select_representative_samples
 
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "profiling"

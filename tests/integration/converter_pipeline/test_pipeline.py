@@ -6,11 +6,11 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from llm_converter.compiler import compile_mapping_ir
-from llm_converter.mapping_ir import MappingIR, MappingIRValidator, MappingStep, SourceReference, StepOperation, TargetAssignment
-from llm_converter.profiling import build_profile_report
-from llm_converter.schema import SourceFieldSpec, SourceSchemaSpec, build_target_schema_card
-from llm_converter.validation import validate_structural_output
+from ai_converter.compiler import compile_mapping_ir
+from ai_converter.mapping_ir import MappingIR, MappingIRValidator, MappingStep, SourceReference, StepOperation, TargetAssignment
+from ai_converter.profiling import build_profile_report
+from ai_converter.schema import SourceFieldSpec, SourceSchemaSpec, build_target_schema_card
+from ai_converter.validation import validate_structural_output
 
 
 ROOT = Path(__file__).resolve().parents[3]

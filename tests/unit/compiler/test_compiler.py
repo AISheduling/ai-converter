@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from llm_converter.compiler import compile_mapping_ir
-from llm_converter.compiler.runtime_ops import (
+from ai_converter.compiler import compile_mapping_ir
+from ai_converter.compiler.runtime_ops import (
     UnsafeExpressionError,
     cast_value,
     derive_value,
     map_enum_value,
     unit_convert_value,
 )
-from llm_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
+from ai_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
 
 
 def test_compiler_emits_importable_module() -> None:

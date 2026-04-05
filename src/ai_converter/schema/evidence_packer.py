@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from llm_converter.profiling.models import FieldProfile, ProfileReport, SampleRecord
+from ai_converter.profiling.models import FieldProfile, ProfileReport, SampleRecord
 
 EvidencePackMode = Literal["compact", "balanced", "full"]
 

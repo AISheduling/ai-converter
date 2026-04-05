@@ -7,7 +7,7 @@ from collections import defaultdict
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from llm_converter.schema import SourceSchemaSpec, TargetFieldCard, TargetSchemaCard
+from ai_converter.schema import SourceSchemaSpec, TargetFieldCard, TargetSchemaCard
 
 from .models import MappingIR, MappingStep, StepOperation
 

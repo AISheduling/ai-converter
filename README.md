@@ -39,7 +39,7 @@ poetry run python -m pytest tests/unit/profiling -q -p no:cacheprovider
 3. Execute one minimal API example:
 
 ```python
-from llm_converter.profiling import build_profile_report
+from ai_converter.profiling import build_profile_report
 
 report = build_profile_report("tests/fixtures/profiling/projects.json")
 
@@ -54,7 +54,7 @@ If you want the broader verification matrix, use [tests/README.md](tests/README.
 The profiling layer lives in `src/llm_converter/profiling/` and exposes a simple entry point through `llm_converter.profiling`.
 
 ```python
-from llm_converter.profiling import build_profile_report
+from ai_converter.profiling import build_profile_report
 
 report = build_profile_report("tests/fixtures/profiling/projects.json")
 
@@ -84,8 +84,8 @@ It helps you:
 ### Example: pack evidence from a profile
 
 ```python
-from llm_converter.profiling import build_profile_report
-from llm_converter.schema import pack_profile_evidence
+from ai_converter.profiling import build_profile_report
+from ai_converter.schema import pack_profile_evidence
 
 report = build_profile_report("tests/fixtures/profiling/projects.json")
 bundle = pack_profile_evidence(
@@ -105,7 +105,7 @@ print(bundle.truncated)
 ```python
 from pydantic import BaseModel, Field
 
-from llm_converter.schema import build_target_schema_card
+from ai_converter.schema import build_target_schema_card
 
 
 class DemoTask(BaseModel):
@@ -135,10 +135,10 @@ It helps you:
 ### Example: rank fake-backed mapping candidates
 
 ```python
-from llm_converter.llm import FakeLLMAdapter, FakeLLMReply
-from llm_converter.mapping_ir import MappingSynthesizer
-from llm_converter.schema.source_spec_models import SourceFieldSpec, SourceSchemaSpec
-from llm_converter.schema.target_card_builder import build_target_schema_card
+from ai_converter.llm import FakeLLMAdapter, FakeLLMReply
+from ai_converter.mapping_ir import MappingSynthesizer
+from ai_converter.schema.source_spec_models import SourceFieldSpec, SourceSchemaSpec
+from ai_converter.schema.target_card_builder import build_target_schema_card
 from pydantic import BaseModel
 
 
@@ -196,7 +196,7 @@ print(result.best_candidate.assignments[0].target_path)
 ### Example: create a real OpenAI-backed adapter
 
 ```python
-from llm_converter.llm import OpenAILLMAdapter
+from ai_converter.llm import OpenAILLMAdapter
 
 adapter = OpenAILLMAdapter(
     model="gpt-5.4-mini",
@@ -222,9 +222,9 @@ It helps you:
 ```python
 from pydantic import BaseModel
 
-from llm_converter.compiler import compile_mapping_ir
-from llm_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
-from llm_converter.validation import validate_structural_output
+from ai_converter.compiler import compile_mapping_ir
+from ai_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
+from ai_converter.validation import validate_structural_output
 
 
 class DemoTask(BaseModel):
@@ -263,10 +263,10 @@ It helps you:
 ### Example: classify compatible drift and build a local patch
 
 ```python
-from llm_converter.drift import classify_drift, propose_compatible_patch
-from llm_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
-from llm_converter.profiling import build_profile_report
-from llm_converter.schema import SourceFieldSpec, SourceSchemaSpec
+from ai_converter.drift import classify_drift, propose_compatible_patch
+from ai_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
+from ai_converter.profiling import build_profile_report
+from ai_converter.schema import SourceFieldSpec, SourceSchemaSpec
 
 baseline_report = build_profile_report("tests/fixtures/drift/baseline_schedule.json")
 candidate_report = build_profile_report("tests/fixtures/drift/rename_schedule.json")
@@ -312,7 +312,7 @@ print(resolution.patch.mapping_ir_operations[0].kind)
 ```python
 from pathlib import Path
 
-from llm_converter.evaluation import (
+from ai_converter.evaluation import (
     BenchmarkCase,
     BenchmarkScenario,
     BenchmarkSubject,

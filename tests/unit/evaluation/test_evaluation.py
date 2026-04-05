@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from llm_converter.evaluation import (
+from ai_converter.evaluation import (
     BenchmarkCase,
     BenchmarkScenario,
     BenchmarkSubject,
@@ -18,7 +18,7 @@ from llm_converter.evaluation import (
     export_benchmark_reports,
     run_benchmark,
 )
-from llm_converter.validation import SemanticAssertion
+from ai_converter.validation import SemanticAssertion
 
 
 class DemoTask(BaseModel):

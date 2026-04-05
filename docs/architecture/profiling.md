@@ -22,7 +22,7 @@ poetry run python -m pytest tests/unit/profiling -q -p no:cacheprovider
 Build one report locally with:
 
 ```python
-from llm_converter.profiling import build_profile_report
+from ai_converter.profiling import build_profile_report
 
 report = build_profile_report("tests/fixtures/profiling/projects.json")
 

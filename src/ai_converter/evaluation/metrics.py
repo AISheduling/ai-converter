@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from llm_converter.validation import AcceptanceReport
+from ai_converter.validation import AcceptanceReport
 
 
 class CaseAccuracyMetrics(BaseModel):

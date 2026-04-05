@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from difflib import SequenceMatcher
 
-from llm_converter.profiling.models import FieldProfile, ProfileReport
-from llm_converter.schema import SourceFieldSpec, SourceSchemaSpec
+from ai_converter.profiling.models import FieldProfile, ProfileReport
+from ai_converter.schema import SourceFieldSpec, SourceSchemaSpec
 
 from .models import DriftClassification, DriftReport, FieldDrift, FieldSignature
 

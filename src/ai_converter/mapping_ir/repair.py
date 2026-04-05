@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from llm_converter.llm.protocol import PromptEnvelope
+from ai_converter.llm.protocol import PromptEnvelope
 
 from .models import MappingIR
 
@@ -46,7 +46,7 @@ def build_repair_prompt(
         A rendered prompt envelope for bounded repair.
     """
 
-    from llm_converter.llm.prompt_renderers import render_repair_prompt
+    from ai_converter.llm.prompt_renderers import render_repair_prompt
 
     return render_repair_prompt(
         mapping_ir,

@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from llm_converter.validation import AcceptanceCase, AcceptanceCaseReport, AcceptanceReport, SemanticAssertion, run_acceptance_suite
+from ai_converter.validation import AcceptanceCase, AcceptanceCaseReport, AcceptanceReport, SemanticAssertion, run_acceptance_suite
 
 from .metrics import BenchmarkMetrics, CaseAccuracyMetrics, build_benchmark_metrics, compute_case_accuracy
 
