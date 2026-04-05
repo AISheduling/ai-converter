@@ -87,6 +87,7 @@ class StepOperation(BaseModel):
         source_ref: Optional single source reference consumed by the step.
         source_refs: Optional collection of source references for multi-input steps.
         step_refs: Optional collection of upstream step references.
+        child_keys: Explicit semantic child keys for ``nest`` keyed by upstream step ref.
         to_type: Target scalar type used by ``cast``.
         mapping: Enum remapping table used by ``map_enum``.
         from_unit: Source unit for ``unit_convert``.
@@ -106,6 +107,7 @@ class StepOperation(BaseModel):
     source_ref: str | None = None
     source_refs: list[str] = Field(default_factory=list)
     step_refs: list[str] = Field(default_factory=list)
+    child_keys: dict[str, str] = Field(default_factory=dict)
     to_type: str | None = None
     mapping: dict[str, str] = Field(default_factory=dict)
     from_unit: str | None = None
@@ -148,6 +150,30 @@ class StepOperation(BaseModel):
         """
 
         return [value.strip() for value in values if value.strip()]
+
+    @field_validator("child_keys")
+    @classmethod
+    def _strip_child_keys(cls, values: dict[str, str]) -> dict[str, str]:
+        """Normalize the explicit child-key contract for ``nest`` operations.
+
+        Args:
+            values: Raw mapping from upstream step refs to semantic child keys.
+
+        Returns:
+            A mapping with stripped, non-empty step refs and child keys.
+
+        Raises:
+            ValueError: If any normalized step ref or child key is blank.
+        """
+
+        normalized: dict[str, str] = {}
+        for step_ref, child_key in values.items():
+            normalized_step_ref = step_ref.strip()
+            normalized_child_key = child_key.strip()
+            if not normalized_step_ref or not normalized_child_key:
+                raise ValueError("child_keys must not contain blank step refs or child keys")
+            normalized[normalized_step_ref] = normalized_child_key
+        return normalized
 
 
 class MappingStep(BaseModel):

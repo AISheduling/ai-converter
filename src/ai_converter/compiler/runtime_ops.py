@@ -217,22 +217,16 @@ def merge_values(values: list[Any], delimiter: str) -> str:
 def nest_values(values: dict[str, Any]) -> dict[str, Any]:
     """Combine step outputs into one nested dictionary payload.
 
-    Dictionary values are merged shallowly, while scalar values are placed under
-    their input keys.
-
     Args:
-        values: Named runtime values keyed by their upstream step ids.
+        values: Named runtime values keyed by their declared semantic child keys.
 
     Returns:
-        A merged dictionary payload.
+        A nested dictionary payload that preserves the declared child keys.
     """
 
     nested: dict[str, Any] = {}
     for key, value in values.items():
         if value is None or value is DROP_SENTINEL:
-            continue
-        if isinstance(value, Mapping):
-            nested.update(copy.deepcopy(dict(value)))
             continue
         nested[key] = copy.deepcopy(value)
     return nested

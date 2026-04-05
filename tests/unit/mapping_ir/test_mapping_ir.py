@@ -145,6 +145,47 @@ def test_mapping_ir_validator_accepts_valid_program() -> None:
     assert result.issues == []
 
 
+def test_mapping_ir_validator_rejects_nest_without_explicit_child_keys() -> None:
+    """Verify that ``nest`` no longer infers semantic keys from step ids.
+
+    Returns:
+        None.
+    """
+
+    validator = MappingIRValidator()
+    result = validator.validate(_candidate_with_implicit_nest_child_keys())
+
+    assert result.valid is False
+    assert any(
+        issue.code == "invalid_arguments"
+        and issue.message == "operation 'nest' requires child_keys"
+        for issue in result.issues
+    )
+
+
+def test_step_operation_strips_explicit_nest_child_keys() -> None:
+    """Verify that the explicit ``nest`` child-key contract is normalized.
+
+    Returns:
+        None.
+    """
+
+    operation = StepOperation(
+        kind="nest",
+        step_refs=[" first_name_value ", " last_name_value "],
+        child_keys={
+            " first_name_value ": " given_name ",
+            " last_name_value ": " family_name ",
+        },
+    )
+
+    assert operation.step_refs == ["first_name_value", "last_name_value"]
+    assert operation.child_keys == {
+        "first_name_value": "given_name",
+        "last_name_value": "family_name",
+    }
+
+
 def test_flatten_target_paths_keeps_container_nodes_by_default() -> None:
     """Verify that structural container paths remain available when requested.
 
@@ -567,6 +608,33 @@ def _candidate_with_hierarchical_conflict() -> MappingIR:
             TargetAssignment(step_id="copy_task_payload", target_path="task"),
             TargetAssignment(step_id="copy_task_id", target_path="task.id"),
         ],
+    )
+
+
+def _candidate_with_implicit_nest_child_keys() -> MappingIR:
+    """Build an invalid candidate that still relies on step ids for nesting.
+
+    Returns:
+        Invalid MappingIR program missing the explicit ``nest`` child-key map.
+    """
+
+    return MappingIR(
+        source_refs=[
+            SourceReference(id="src_first_name", path="first_name", dtype="str"),
+            SourceReference(id="src_last_name", path="last_name", dtype="str"),
+        ],
+        steps=[
+            MappingStep(id="first_name_value", operation=StepOperation(kind="copy", source_ref="src_first_name")),
+            MappingStep(id="last_name_value", operation=StepOperation(kind="copy", source_ref="src_last_name")),
+            MappingStep(
+                id="person_payload",
+                operation=StepOperation(
+                    kind="nest",
+                    step_refs=["first_name_value", "last_name_value"],
+                ),
+            ),
+        ],
+        assignments=[TargetAssignment(step_id="person_payload", target_path="task")],
     )
 
 

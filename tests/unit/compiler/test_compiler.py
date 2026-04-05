@@ -123,6 +123,31 @@ def test_compiled_converter_fails_fast_on_hierarchical_target_conflict_when_vali
         converter.convert({"task_payload": "legacy", "task_id": "ID-2"})
 
 
+def test_compiled_converter_nest_uses_explicit_child_keys() -> None:
+    """Verify that ``nest`` uses declared semantic child keys instead of step ids.
+
+    Returns:
+        None.
+    """
+
+    converter = compile_mapping_ir(
+        _program_with_explicit_nest_child_keys(),
+        module_name="compiled_explicit_nest_child_keys",
+    )
+
+    output = converter.convert({"first_name": "Ada", "last_name": "Lovelace"})
+
+    assert output == {
+        "person": {
+            "given_name": "Ada",
+            "family_name": "Lovelace",
+        }
+    }
+    assert "'given_name': step_values.get('first_name_value')" in converter.source_code
+    assert "'family_name': step_values.get('last_name_value')" in converter.source_code
+    assert "'first_name_value': step_values.get('first_name_value')" not in converter.source_code
+
+
 def test_converter_package_export_is_deterministic() -> None:
     """Verify that package export writes deterministic manifest and payload files.
 
@@ -288,4 +313,35 @@ def _program_with_hierarchical_target_conflict() -> MappingIR:
             TargetAssignment(step_id="copy_task_payload", target_path="task"),
             TargetAssignment(step_id="copy_task_id", target_path="task.id"),
         ],
+    )
+
+
+def _program_with_explicit_nest_child_keys() -> MappingIR:
+    """Build a program whose nested semantic keys differ from internal step ids.
+
+    Returns:
+        Valid MappingIR program that exercises the explicit ``nest`` contract.
+    """
+
+    return MappingIR(
+        source_refs=[
+            SourceReference(id="src_first_name", path="first_name", dtype="str"),
+            SourceReference(id="src_last_name", path="last_name", dtype="str"),
+        ],
+        steps=[
+            MappingStep(id="first_name_value", operation=StepOperation(kind="copy", source_ref="src_first_name")),
+            MappingStep(id="last_name_value", operation=StepOperation(kind="copy", source_ref="src_last_name")),
+            MappingStep(
+                id="person_payload",
+                operation=StepOperation(
+                    kind="nest",
+                    step_refs=["first_name_value", "last_name_value"],
+                    child_keys={
+                        "first_name_value": "given_name",
+                        "last_name_value": "family_name",
+                    },
+                ),
+            ),
+        ],
+        assignments=[TargetAssignment(step_id="person_payload", target_path="person")],
     )

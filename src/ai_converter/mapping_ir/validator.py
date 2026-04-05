@@ -233,6 +233,69 @@ class MappingIRValidator:
                     location=location,
                 )
             )
+        if operation.kind == "nest" and not operation.child_keys:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_arguments",
+                    message="operation 'nest' requires child_keys",
+                    location=location,
+                )
+            )
+        if operation.kind == "nest" and operation.child_keys:
+            missing_child_keys = [
+                step_ref
+                for step_ref in operation.step_refs
+                if step_ref not in operation.child_keys
+            ]
+            if missing_child_keys:
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_arguments",
+                        message=(
+                            "operation 'nest' child_keys must cover every step_ref; missing: "
+                            + ", ".join(missing_child_keys)
+                        ),
+                        location=location,
+                    )
+                )
+
+            extra_child_keys = sorted(
+                step_ref
+                for step_ref in operation.child_keys
+                if step_ref not in operation.step_refs
+            )
+            if extra_child_keys:
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_arguments",
+                        message=(
+                            "operation 'nest' child_keys must reference declared step_refs only; extra: "
+                            + ", ".join(extra_child_keys)
+                        ),
+                        location=location,
+                    )
+                )
+
+            duplicate_child_keys = sorted(
+                child_key
+                for child_key, count in Counter(
+                    operation.child_keys[step_ref]
+                    for step_ref in operation.step_refs
+                    if step_ref in operation.child_keys
+                ).items()
+                if count > 1
+            )
+            if duplicate_child_keys:
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_arguments",
+                        message=(
+                            "operation 'nest' child_keys must be unique; duplicates: "
+                            + ", ".join(duplicate_child_keys)
+                        ),
+                        location=location,
+                    )
+                )
         if operation.kind == "cast" and not operation.to_type:
             issues.append(
                 ValidationIssue(

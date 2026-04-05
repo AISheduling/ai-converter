@@ -411,7 +411,7 @@ def _render_step_expression(operation: StepOperation) -> str:
         return f"runtime_ops.merge_values([{', '.join(values)}], {operation.delimiter!r})"
     if kind == "nest":
         nested_values = ", ".join(
-            f"{step_ref!r}: step_values.get({step_ref!r})"
+            f"{operation.child_keys[step_ref]!r}: step_values.get({step_ref!r})"
             for step_ref in operation.step_refs
         )
         return f"runtime_ops.nest_values({{{nested_values}}})"
