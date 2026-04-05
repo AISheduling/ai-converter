@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -66,9 +66,24 @@ class MappingIRValidator:
         """
 
         issues: list[ValidationIssue] = []
-        source_ids = {ref.id for ref in program.source_refs}
+        source_ref_counts = Counter(ref.id for ref in program.source_refs)
+        duplicate_source_ref_ids = sorted(
+            source_ref_id
+            for source_ref_id, count in source_ref_counts.items()
+            if count > 1
+        )
+        source_ids = set(source_ref_counts)
         step_ids = [step.id for step in program.steps]
         step_id_set = set(step_ids)
+
+        for source_ref_id in duplicate_source_ref_ids:
+            issues.append(
+                ValidationIssue(
+                    code="duplicate_source_ref_id",
+                    message=f"source refs must have unique ids; repeated id '{source_ref_id}'",
+                    location=f"source_refs.{source_ref_id}",
+                )
+            )
 
         if len(step_ids) != len(step_id_set):
             issues.append(

@@ -95,6 +95,21 @@ def test_mapping_ir_validator_rejects_conflicting_target_writes() -> None:
     assert any(issue.code == "conflicting_target_write" for issue in result.issues)
 
 
+def test_mapping_ir_validator_rejects_duplicate_source_ref_ids() -> None:
+    """Verify that duplicate source reference ids are rejected.
+
+    Returns:
+        None.
+    """
+
+    validator = MappingIRValidator()
+    result = validator.validate(_candidate_with_duplicate_source_ref_ids())
+
+    assert result.valid is False
+    assert any(issue.code == "duplicate_source_ref_id" for issue in result.issues)
+    assert any(issue.location == "source_refs.src_task_id" for issue in result.issues)
+
+
 def test_mapping_ir_validator_accepts_valid_program() -> None:
     """Verify that a well-formed MappingIR program is accepted.
 
@@ -495,6 +510,23 @@ def _candidate_with_conflicting_writes() -> MappingIR:
             TargetAssignment(step_id="copy_task_name", target_path="task.name"),
             TargetAssignment(step_id="copy_status", target_path="task.name"),
         ],
+    )
+
+
+def _candidate_with_duplicate_source_ref_ids() -> MappingIR:
+    """Build an invalid candidate with duplicate source reference ids.
+
+    Returns:
+        Invalid mapping program whose duplicate source ids would clobber runtime input.
+    """
+
+    return MappingIR(
+        source_refs=[
+            SourceReference(id="src_task_id", path="task_id", dtype="str"),
+            SourceReference(id="src_task_id", path="task_name", dtype="str"),
+        ],
+        steps=[MappingStep(id="copy_task_id", operation=StepOperation(kind="copy", source_ref="src_task_id"))],
+        assignments=[TargetAssignment(step_id="copy_task_id", target_path="task.id")],
     )
 
 

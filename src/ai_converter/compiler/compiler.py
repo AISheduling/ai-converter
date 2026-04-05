@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from pprint import pformat
@@ -198,6 +199,7 @@ def compile_mapping_ir(
         if not validation.valid:
             messages = "; ".join(f"{issue.location}: {issue.message}" for issue in validation.issues)
             raise CompilationError(f"cannot compile invalid MappingIR: {messages}")
+    _raise_for_duplicate_source_ref_ids(program)
 
     normalized_program = _normalize_program(program)
     source_code = _render_module_source(normalized_program)
@@ -257,6 +259,30 @@ def _normalize_program(program: MappingIR) -> MappingIR:
         preconditions=list(program.preconditions),
         postconditions=list(program.postconditions),
     )
+
+
+def _raise_for_duplicate_source_ref_ids(program: MappingIR) -> None:
+    """Reject ambiguous source reference ids before code generation.
+
+    Args:
+        program: MappingIR program being compiled.
+
+    Raises:
+        CompilationError: If any source reference id appears more than once.
+    """
+
+    source_ref_counts = Counter(ref.id for ref in program.source_refs)
+    duplicate_source_ref_ids = sorted(
+        source_ref_id
+        for source_ref_id, count in source_ref_counts.items()
+        if count > 1
+    )
+    if duplicate_source_ref_ids:
+        duplicate_ids = ", ".join(repr(source_ref_id) for source_ref_id in duplicate_source_ref_ids)
+        raise CompilationError(
+            "cannot compile MappingIR with duplicate source_ref ids: "
+            f"{duplicate_ids}"
+        )
 
 
 def _dependencies_for_step(step: MappingStep) -> set[str]:

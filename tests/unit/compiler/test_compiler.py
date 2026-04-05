@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_converter.compiler import ConverterPackage, compile_mapping_ir
+from ai_converter.compiler import CompilationError, ConverterPackage, compile_mapping_ir
 from ai_converter.compiler.runtime_ops import (
     UnsafeExpressionError,
     cast_value,
@@ -87,6 +87,21 @@ def test_converter_package_manifest_is_versioned_and_machine_readable() -> None:
     assert "ai_converter.validation.run_acceptance_suite" in payload["validation_entry_points"]
     assert "tests/unit/compiler/test_compiler.py" in payload["test_paths"]
     assert json.loads(json.dumps(payload, sort_keys=True)) == payload
+
+
+def test_compiler_rejects_duplicate_source_ref_ids_when_validation_is_disabled() -> None:
+    """Verify that the compiler defends against duplicate source ids on bypass paths.
+
+    Returns:
+        None.
+    """
+
+    with pytest.raises(CompilationError, match="duplicate source_ref ids: 'src_task_id'"):
+        compile_mapping_ir(
+            _program_with_duplicate_source_ref_ids(),
+            module_name="compiled_duplicate_source_ids",
+            validate_program=False,
+        )
 
 
 def test_converter_package_export_is_deterministic() -> None:
@@ -214,4 +229,21 @@ def _program() -> MappingIR:
             TargetAssignment(step_id="owner_email", target_path="metadata.owner_email"),
             TargetAssignment(step_id="summary", target_path="metadata.summary"),
         ],
+    )
+
+
+def _program_with_duplicate_source_ref_ids() -> MappingIR:
+    """Build an invalid MappingIR program with duplicate source reference ids.
+
+    Returns:
+        Invalid MappingIR program whose duplicate ids would overwrite source values.
+    """
+
+    return MappingIR(
+        source_refs=[
+            SourceReference(id="src_task_id", path="task_id", dtype="str"),
+            SourceReference(id="src_task_id", path="task_name", dtype="str"),
+        ],
+        steps=[MappingStep(id="copy_task_id", operation=StepOperation(kind="copy", source_ref="src_task_id"))],
+        assignments=[TargetAssignment(step_id="copy_task_id", target_path="task.id")],
     )
