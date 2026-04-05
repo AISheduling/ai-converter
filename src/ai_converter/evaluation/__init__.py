@@ -24,6 +24,7 @@ from .reporting import (
     write_benchmark_csv,
     write_benchmark_json,
     write_benchmark_markdown,
+    write_benchmark_telemetry_json,
 )
 
 __all__ = [
@@ -46,4 +47,5 @@ __all__ = [
     "write_benchmark_csv",
     "write_benchmark_json",
     "write_benchmark_markdown",
+    "write_benchmark_telemetry_json",
 ]

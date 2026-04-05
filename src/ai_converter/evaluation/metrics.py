@@ -35,8 +35,8 @@ class BenchmarkMetrics(BaseModel):
     pass_at_1: float = Field(ge=0.0, le=1.0)
     coverage: float = Field(ge=0.0, le=1.0)
     repair_iterations: int = Field(ge=0)
-    preparation_seconds: float = Field(ge=0.0)
-    runtime_seconds: float = Field(ge=0.0)
+    preparation_seconds: float = Field(ge=0.0, exclude=True)
+    runtime_seconds: float = Field(ge=0.0, exclude=True)
 
 
 def compute_case_accuracy(

@@ -1,6 +1,6 @@
 ## Benchmark Protocol
 
-`TASK-05` adds a deterministic benchmark layer under `src/llm_converter/evaluation/`.
+`TASK-05` adds a deterministic benchmark layer under `src/ai_converter/evaluation/`.
 
 The benchmark harness is intentionally library-first. It does not require a CLI or any network access.
 
@@ -32,17 +32,27 @@ The harness computes:
 - preparation seconds
 - runtime seconds
 
-The metric helpers live in `src/llm_converter/evaluation/metrics.py`.
+Wall-clock timing is treated as telemetry, not as part of the canonical
+machine-readable benchmark contract.
+
+The metric helpers live in `src/ai_converter/evaluation/metrics.py`.
 
 ### Outputs
 
 Use `export_benchmark_reports(...)` to write:
 
-- JSON for machine-readable result ingestion
-- CSV for flattened per-case comparisons
+- canonical JSON for machine-readable result ingestion
+- canonical CSV for flattened per-case comparisons
 - Markdown for quick scenario and baseline review
+- optional telemetry JSON sidecar when timing diagnostics are needed
 
-The helper returns the concrete output paths, and the exported files are typically written into a repo-local directory such as `benchmark_artifacts/`.
+The helper returns the concrete output paths, and the exported files are
+typically written into a repo-local directory such as `benchmark_artifacts/`.
+
+Canonical `benchmark.json` and `benchmark.csv` intentionally omit volatile
+wall-clock timing fields so repeated runs against identical deterministic
+fixtures can produce stable artifacts. If you still want timing diagnostics,
+pass `include_telemetry=True` and consume `<stem>.telemetry.json` instead.
 
 ### Minimal Workflow
 
@@ -82,11 +92,30 @@ result = run_benchmark([subject], [scenario])
 export_benchmark_reports(result, Path("benchmark_artifacts"), stem="task05_demo")
 ```
 
+To also persist timing diagnostics without changing the canonical JSON/CSV
+payloads:
+
+```python
+export_benchmark_reports(
+    result,
+    Path("benchmark_artifacts"),
+    stem="task05_demo",
+    include_telemetry=True,
+)
+```
+
 ### Fixture Guidance
 
 - Keep benchmark and drift fixtures deterministic.
 - Prefer synthetic scenarios under `tests/fixtures/drift/` over external datasets.
 - Reuse fake or compiled converters only. Do not call live LLMs or the network from benchmark tests.
+
+### Migration Note
+
+If you previously read `preparation_seconds` or `runtime_seconds` from the
+default `benchmark.json` or `benchmark.csv` exports, switch that consumer to
+the optional telemetry sidecar. The canonical JSON/CSV artifacts are now the
+reproducible contract.
 
 ### Example Config
 

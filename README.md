@@ -11,7 +11,7 @@ At the current stage the library gives you six main building blocks:
 - synthesizing and validating `MappingIR` candidates with file-backed prompts and a fake LLM adapter
 - compiling valid `MappingIR` programs into versioned `ConverterPackage` artifacts with offline acceptance validation
 - classifying compatible versus breaking input drift and generating local patches
-- benchmarking baseline and compiled converters with deterministic metrics and report exports
+- benchmarking baseline and compiled converters with deterministic metrics, canonical report exports, and optional timing telemetry
 
 Test-running instructions live in [tests/README.md](tests/README.md).
 
@@ -281,7 +281,7 @@ It helps you:
 - classify additive, rename-compatible, semantic, and breaking source drift
 - propose local source-schema and `MappingIR` patches without regenerating the whole converter
 - run baseline and compiled converters through one benchmark harness
-- export JSON, CSV, and Markdown benchmark reports
+- export canonical JSON, CSV, and Markdown benchmark reports, plus optional timing telemetry
 
 ### Example: classify compatible drift and build a local patch
 
@@ -370,6 +370,12 @@ paths = export_benchmark_reports(result, Path("benchmark_artifacts"), stem="task
 print(paths["json"])
 print(paths["markdown"])
 ```
+
+Canonical `benchmark.json` and `benchmark.csv` omit volatile wall-clock timing
+fields so identical deterministic runs can produce reproducible machine-readable
+artifacts. If you need timing diagnostics, call
+`export_benchmark_reports(..., include_telemetry=True)` and read the separate
+`<stem>.telemetry.json` sidecar.
 
 ## Package Layout
 

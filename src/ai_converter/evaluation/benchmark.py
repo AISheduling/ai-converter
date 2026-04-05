@@ -74,7 +74,7 @@ class BenchmarkCaseResult(BaseModel):
     name: str
     tags: list[str] = Field(default_factory=list)
     execution_success: bool
-    runtime_seconds: float = Field(ge=0.0)
+    runtime_seconds: float = Field(ge=0.0, exclude=True)
     output: dict[str, Any] | None = None
     error: str | None = None
     metrics: CaseAccuracyMetrics
@@ -89,7 +89,7 @@ class BenchmarkSubjectResult(BaseModel):
 
     subject_name: str
     subject_kind: str
-    preparation_seconds: float = Field(ge=0.0)
+    preparation_seconds: float = Field(ge=0.0, exclude=True)
     case_results: list[BenchmarkCaseResult] = Field(default_factory=list)
     metrics: BenchmarkMetrics
     acceptance_report: AcceptanceReport | None = None

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from ai_converter.evaluation import (
     BenchmarkCase,
+    BenchmarkRunResult,
     BenchmarkScenario,
     BenchmarkSubject,
     compute_case_accuracy,
@@ -33,6 +34,53 @@ class DemoTarget(BaseModel):
 
     task: DemoTask
     status: str
+
+
+def _build_demo_benchmark_result() -> BenchmarkRunResult:
+    """Build a deterministic benchmark result for reporting tests."""
+
+    subject = BenchmarkSubject.from_converter(
+        "baseline",
+        lambda record: {
+            "task": {"id": record["task_id"], "name": record["task_name"]},
+            "status": record["status_text"].lower(),
+        },
+    )
+    scenario = BenchmarkScenario(
+        name="reporting-demo",
+        target_model=DemoTarget,
+        cases=[
+            BenchmarkCase(
+                name="case-1",
+                record={"task_id": "T-1", "task_name": "Plan", "status_text": "READY"},
+                expected_output={"task": {"id": "T-1", "name": "Plan"}, "status": "ready"},
+                required_fields=["task.id", "status"],
+                assertions=[
+                    SemanticAssertion(
+                        name="task-id-equals-source",
+                        kind="equals",
+                        target_path="task.id",
+                        source_path="task_id",
+                    )
+                ],
+            )
+        ],
+    )
+    return run_benchmark([subject], [scenario])
+
+
+def _assert_timing_fields_absent(value: object) -> None:
+    """Assert that a nested payload contains no canonical timing fields."""
+
+    if isinstance(value, dict):
+        assert "preparation_seconds" not in value
+        assert "runtime_seconds" not in value
+        for nested in value.values():
+            _assert_timing_fields_absent(nested)
+        return
+    if isinstance(value, list):
+        for nested in value:
+            _assert_timing_fields_absent(nested)
 
 
 def test_metrics_compute_required_field_accuracy() -> None:
@@ -127,47 +175,62 @@ def test_benchmark_harness_runs_on_fake_converters() -> None:
 def test_reporting_exports_machine_readable_and_md_outputs() -> None:
     """Verify that benchmark reporting exports JSON, CSV, and Markdown artifacts."""
 
-    subject = BenchmarkSubject.from_converter(
-        "baseline",
-        lambda record: {
-            "task": {"id": record["task_id"], "name": record["task_name"]},
-            "status": record["status_text"].lower(),
-        },
-    )
-    scenario = BenchmarkScenario(
-        name="reporting-demo",
-        target_model=DemoTarget,
-        cases=[
-            BenchmarkCase(
-                name="case-1",
-                record={"task_id": "T-1", "task_name": "Plan", "status_text": "READY"},
-                expected_output={"task": {"id": "T-1", "name": "Plan"}, "status": "ready"},
-                required_fields=["task.id", "status"],
-                assertions=[
-                    SemanticAssertion(
-                        name="task-id-equals-source",
-                        kind="equals",
-                        target_path="task.id",
-                        source_path="task_id",
-                    )
-                ],
-            )
-        ],
-    )
-    result = run_benchmark([subject], [scenario])
+    result = _build_demo_benchmark_result()
 
     output_dir = Path(".agent") / "tasks" / "TASK-05" / "raw" / "reporting-test-output"
     shutil.rmtree(output_dir, ignore_errors=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        paths = export_benchmark_reports(result, output_dir, stem="task05")
+        paths = export_benchmark_reports(
+            result,
+            output_dir,
+            stem="task05",
+            include_telemetry=True,
+        )
 
-        assert json.loads(paths["json"].read_text(encoding="utf-8"))["scenario_results"][0]["scenario_name"] == "reporting-demo"
-        assert "baseline" in paths["csv"].read_text(encoding="utf-8")
+        json_payload = json.loads(paths["json"].read_text(encoding="utf-8"))
+        assert json_payload["scenario_results"][0]["scenario_name"] == "reporting-demo"
+        _assert_timing_fields_absent(json_payload)
+
+        csv_text = paths["csv"].read_text(encoding="utf-8")
+        assert "baseline" in csv_text
+        assert "runtime_seconds" not in csv_text
+
+        telemetry_payload = json.loads(paths["telemetry"].read_text(encoding="utf-8"))
+        assert telemetry_payload["scenario_results"][0]["subject_results"][0]["preparation_seconds"] >= 0.0
+        assert telemetry_payload["scenario_results"][0]["subject_results"][0]["runtime_seconds"] >= 0.0
+        assert telemetry_payload["scenario_results"][0]["subject_results"][0]["case_results"][0]["runtime_seconds"] >= 0.0
+
         markdown = paths["markdown"].read_text(encoding="utf-8")
         assert "# Benchmark Summary" in markdown
         assert "reporting-demo" in markdown
         assert "baseline" in markdown
+    finally:
+        shutil.rmtree(output_dir, ignore_errors=True)
+
+
+def test_canonical_benchmark_exports_are_reproducible_between_runs() -> None:
+    """Verify that canonical machine-readable benchmark exports are reproducible."""
+
+    first_result = _build_demo_benchmark_result()
+    second_result = _build_demo_benchmark_result()
+
+    output_dir = Path(".agent") / "tasks" / "TASK-05" / "raw" / "reporting-repro-output"
+    shutil.rmtree(output_dir, ignore_errors=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        first_paths = export_benchmark_reports(first_result, output_dir, stem="first")
+        second_paths = export_benchmark_reports(second_result, output_dir, stem="second")
+
+        first_json = first_paths["json"].read_text(encoding="utf-8")
+        second_json = second_paths["json"].read_text(encoding="utf-8")
+        first_csv = first_paths["csv"].read_text(encoding="utf-8")
+        second_csv = second_paths["csv"].read_text(encoding="utf-8")
+
+        assert first_json == second_json
+        assert first_csv == second_csv
+        _assert_timing_fields_absent(json.loads(first_json))
     finally:
         shutil.rmtree(output_dir, ignore_errors=True)
