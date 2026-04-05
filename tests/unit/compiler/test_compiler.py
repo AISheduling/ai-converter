@@ -32,6 +32,8 @@ def test_compiler_emits_importable_module() -> None:
     assert isinstance(first, ConverterPackage)
     assert callable(first.module.convert)
     assert "def convert(record):" in first.source_code
+    assert "from ai_converter.compiler import runtime_ops" in first.source_code
+    assert "from llm_converter.compiler import runtime_ops" not in first.source_code
     assert first.source_code == second.source_code
     assert first.manifest.source_sha256 == second.manifest.source_sha256
 
