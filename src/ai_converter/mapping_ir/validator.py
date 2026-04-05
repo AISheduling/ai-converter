@@ -409,11 +409,17 @@ class MappingIRValidator:
         return refs
 
 
-def flatten_target_paths(target_schema: TargetSchemaCard) -> set[str]:
-    """Flatten target-card fields into a canonical target-path set.
+def flatten_target_paths(
+    target_schema: TargetSchemaCard,
+    *,
+    include_containers: bool = True,
+) -> set[str]:
+    """Flatten target-card fields into canonical target paths.
 
     Args:
         target_schema: Target schema card to flatten.
+        include_containers: Whether structural container nodes should be
+            included in the flattened set.
 
     Returns:
         Set of canonical dotted target paths.
@@ -421,21 +427,43 @@ def flatten_target_paths(target_schema: TargetSchemaCard) -> set[str]:
 
     paths: set[str] = set()
     for field in target_schema.fields:
-        paths.update(_flatten_field_paths(field))
+        paths.update(_flatten_field_paths(field, include_containers=include_containers))
     return paths
 
 
-def _flatten_field_paths(field: TargetFieldCard) -> set[str]:
+def flatten_assignable_target_paths(target_schema: TargetSchemaCard) -> set[str]:
+    """Return only assignable leaf target paths for coverage scoring.
+
+    Container nodes still matter for nested-schema validation and conflict
+    analysis, but coverage ratios should reflect leaf assignments rather than
+    structural parents.
+
+    Args:
+        target_schema: Target schema card to flatten.
+
+    Returns:
+        Set of canonical leaf target paths.
+    """
+
+    return flatten_target_paths(target_schema, include_containers=False)
+
+
+def _flatten_field_paths(
+    field: TargetFieldCard,
+    *,
+    include_containers: bool,
+) -> set[str]:
     """Flatten one target-card subtree into canonical paths.
 
     Args:
         field: Target field card to flatten.
+        include_containers: Whether to include structural container nodes.
 
     Returns:
         Set of canonical paths for the subtree.
     """
 
-    paths = {field.path}
+    paths = {field.path} if include_containers or not field.children else set()
     for child in field.children:
-        paths.update(_flatten_field_paths(child))
+        paths.update(_flatten_field_paths(child, include_containers=include_containers))
     return paths

@@ -10,7 +10,11 @@ from typing import Iterable
 from ai_converter.schema import SourceSchemaSpec, TargetSchemaCard
 
 from .models import MappingIR
-from .validator import MappingIRValidator, ValidationResult, flatten_target_paths
+from .validator import (
+    MappingIRValidator,
+    ValidationResult,
+    flatten_assignable_target_paths,
+)
 
 
 @dataclass(slots=True)
@@ -57,13 +61,18 @@ def evaluate_candidate(
     if candidate is not None:
         coverage_paths = _coverage_paths(candidate, target_schema=target_schema)
         if target_schema is not None:
-            target_paths = flatten_target_paths(target_schema)
+            target_paths = flatten_assignable_target_paths(target_schema)
             if target_paths:
                 coverage_ratio = len(coverage_paths) / len(target_paths)
         elif candidate.assignments:
             coverage_ratio = 1.0
 
-    score = (1000.0 if validation.valid else 0.0) + (coverage_ratio * 100.0) + len(coverage_paths) - (len(validation.issues) * 25.0)
+    score = (
+        (1000.0 if validation.valid else 0.0)
+        + (coverage_ratio * 100.0)
+        + len(coverage_paths)
+        - (len(validation.issues) * 25.0)
+    )
     return RankedCandidate(
         candidate=candidate,
         validation=validation,
@@ -144,7 +153,11 @@ def _coverage_paths(candidate: MappingIR, *, target_schema: TargetSchemaCard | N
         Sorted list of covered target paths.
     """
 
-    target_paths = flatten_target_paths(target_schema) if target_schema is not None else None
+    target_paths = (
+        flatten_assignable_target_paths(target_schema)
+        if target_schema is not None
+        else None
+    )
     covered = {
         assignment.target_path
         for assignment in candidate.assignments

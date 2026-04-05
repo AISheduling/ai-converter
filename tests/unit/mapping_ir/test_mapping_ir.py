@@ -28,6 +28,8 @@ from ai_converter.mapping_ir import (
     StepOperation,
     TargetAssignment,
     build_repair_prompt,
+    evaluate_candidate,
+    flatten_target_paths,
     select_best_candidate,
 )
 from ai_converter.profiling.report_builder import build_profile_report
@@ -51,6 +53,18 @@ class DemoTarget(BaseModel):
 
     task: DemoTask
     status: str | None = Field(default=None, description="Task status")
+
+
+class SingleLeafTask(BaseModel):
+    """Nested target model with one assignable leaf field."""
+
+    id: str = Field(description="Task identifier")
+
+
+class SingleLeafTarget(BaseModel):
+    """Root target model used to isolate container-vs-leaf coverage."""
+
+    task: SingleLeafTask
 
 
 def test_mapping_ir_validator_rejects_unknown_source_refs() -> None:
@@ -97,6 +111,38 @@ def test_mapping_ir_validator_accepts_valid_program() -> None:
 
     assert result.valid is True
     assert result.issues == []
+
+
+def test_flatten_target_paths_keeps_container_nodes_by_default() -> None:
+    """Verify that structural container paths remain available when requested.
+
+    Returns:
+        None.
+    """
+
+    assert flatten_target_paths(_single_leaf_target_schema()) == {"task", "task.id"}
+
+
+def test_evaluate_candidate_ignores_container_paths_in_coverage_ratio() -> None:
+    """Verify that coverage ratios use only assignable leaf target paths.
+
+    Returns:
+        None.
+    """
+
+    candidate = _single_leaf_candidate()
+    target_schema = _single_leaf_target_schema()
+    validation = MappingIRValidator().validate(candidate, target_schema=target_schema)
+
+    ranked = evaluate_candidate(
+        candidate,
+        validation=validation,
+        target_schema=target_schema,
+    )
+
+    assert validation.valid is True
+    assert ranked.coverage_paths == ["task.id"]
+    assert ranked.coverage_ratio == 1.0
 
 
 def test_prompt_renderer_includes_required_sections() -> None:
@@ -333,6 +379,16 @@ def _target_schema():
     return build_target_schema_card(DemoTarget)
 
 
+def _single_leaf_target_schema():
+    """Build a nested target schema with exactly one assignable leaf.
+
+    Returns:
+        Compact target schema card with one nested leaf field.
+    """
+
+    return build_target_schema_card(SingleLeafTarget)
+
+
 def _source_refs() -> list[SourceReference]:
     """Build canonical source references for test programs.
 
@@ -345,6 +401,25 @@ def _source_refs() -> list[SourceReference]:
         SourceReference(id="src_task_name", path="task_name", dtype="str"),
         SourceReference(id="src_status", path="status_text", dtype="str"),
     ]
+
+
+def _single_leaf_candidate() -> MappingIR:
+    """Build a valid candidate that writes only the nested leaf path.
+
+    Returns:
+        Valid mapping program for single-leaf nested coverage tests.
+    """
+
+    return MappingIR(
+        source_refs=[SourceReference(id="src_task_id", path="task_id", dtype="str")],
+        steps=[
+            MappingStep(
+                id="copy_task_id",
+                operation=StepOperation(kind="copy", source_ref="src_task_id"),
+            )
+        ],
+        assignments=[TargetAssignment(step_id="copy_task_id", target_path="task.id")],
+    )
 
 
 def _partial_candidate() -> MappingIR:
