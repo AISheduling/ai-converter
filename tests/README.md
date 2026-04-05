@@ -78,6 +78,12 @@ Smoke integration tests:
 
 - `tests/integration/converter_pipeline/`
 
+Coverage notes:
+
+- verifies the explicit `ConverterPackage` contract
+- verifies deterministic manifest/export behavior
+- keeps the compiled converter, acceptance, and repair-loop path offline
+
 Command:
 
 ```bash

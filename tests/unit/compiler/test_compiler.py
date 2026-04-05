@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import shutil
+from pathlib import Path
+
 import pytest
 
-from ai_converter.compiler import compile_mapping_ir
+from ai_converter.compiler import ConverterPackage, compile_mapping_ir
 from ai_converter.compiler.runtime_ops import (
     UnsafeExpressionError,
     cast_value,
@@ -25,9 +29,11 @@ def test_compiler_emits_importable_module() -> None:
     first = compile_mapping_ir(_program(), module_name="compiled_demo_one")
     second = compile_mapping_ir(_program(), module_name="compiled_demo_two")
 
+    assert isinstance(first, ConverterPackage)
     assert callable(first.module.convert)
     assert "def convert(record):" in first.source_code
     assert first.source_code == second.source_code
+    assert first.manifest.source_sha256 == second.manifest.source_sha256
 
 
 def test_compiled_converter_executes_without_llm() -> None:
@@ -63,6 +69,53 @@ def test_compiled_converter_executes_without_llm() -> None:
             "summary": "Unnamed@T-1",
         },
     }
+
+
+def test_converter_package_manifest_is_versioned_and_machine_readable() -> None:
+    """Verify that compiled packages expose a versioned manifest payload.
+
+    Returns:
+        None.
+    """
+
+    package = compile_mapping_ir(_program(), module_name="compiled_demo_manifest")
+    payload = package.to_manifest_payload()
+
+    assert payload["artifact_kind"] == "ConverterPackage"
+    assert payload["artifact_version"] == "1.0"
+    assert payload["program_version"] == _program().version
+    assert "ai_converter.validation.run_acceptance_suite" in payload["validation_entry_points"]
+    assert "tests/unit/compiler/test_compiler.py" in payload["test_paths"]
+    assert json.loads(json.dumps(payload, sort_keys=True)) == payload
+
+
+def test_converter_package_export_is_deterministic() -> None:
+    """Verify that package export writes deterministic manifest and payload files.
+
+    Returns:
+        None.
+    """
+
+    first = compile_mapping_ir(_program(), module_name="compiled_demo_export")
+    second = compile_mapping_ir(_program(), module_name="compiled_demo_export")
+
+    workspace_temp_root = Path.cwd() / ".pytest-local-tmp"
+    workspace_temp_root.mkdir(exist_ok=True)
+    try:
+        first_export = first.export(workspace_temp_root / "export-first")
+        second_export = second.export(workspace_temp_root / "export-second")
+
+        assert first_export.manifest_path.read_text(
+            encoding="utf-8"
+        ) == second_export.manifest_path.read_text(encoding="utf-8")
+        assert first_export.module_path.read_text(
+            encoding="utf-8"
+        ) == second_export.module_path.read_text(encoding="utf-8")
+        assert first_export.program_path.read_text(
+            encoding="utf-8"
+        ) == second_export.program_path.read_text(encoding="utf-8")
+    finally:
+        shutil.rmtree(workspace_temp_root, ignore_errors=True)
 
 
 def test_runtime_cast_and_enum_mapping() -> None:

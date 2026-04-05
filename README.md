@@ -9,7 +9,7 @@ At the current stage the library gives you six main building blocks:
 - profiling raw `CSV`, `JSON`, and `JSONL` inputs into a stable `ProfileReport`
 - building schema contracts and compact evidence bundles on top of that profile
 - synthesizing and validating `MappingIR` candidates with file-backed prompts and a fake LLM adapter
-- compiling valid `MappingIR` programs into pure Python converters with offline acceptance validation
+- compiling valid `MappingIR` programs into versioned `ConverterPackage` artifacts with offline acceptance validation
 - classifying compatible versus breaking input drift and generating local patches
 - benchmarking baseline and compiled converters with deterministic metrics and report exports
 
@@ -212,8 +212,9 @@ The OpenAI adapter uses the Responses API under the hood and keeps imports lazy,
 
 It helps you:
 
-- compile a validated `MappingIR` program into an importable Python module
-- execute the compiled converter without any live LLM calls
+- compile a validated `MappingIR` program into a versioned `ConverterPackage`
+- execute the packaged converter without any live LLM calls
+- export a deterministic manifest, generated module, and normalized `MappingIR` payload
 - validate the converted payload structurally with a target `Pydantic` model
 - run semantic assertions and bounded repair loops offline with fake patch strategies
 
@@ -241,12 +242,13 @@ program = MappingIR(
     assignments=[TargetAssignment(step_id="copy_task_id", target_path="task.id")],
 )
 
-compiled = compile_mapping_ir(program)
-payload = compiled.convert({"task_id": "T-1"})
+package = compile_mapping_ir(program)
+payload = package.convert({"task_id": "T-1"})
 result = validate_structural_output(payload, DemoTarget)
 
 print(payload)
 print(result.valid)
+print(package.manifest.artifact_version)
 ```
 
 ## Use The Drift And Evaluation APIs

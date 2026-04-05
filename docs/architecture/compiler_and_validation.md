@@ -1,11 +1,11 @@
 # Compiler And Validation
 
-`TASK-04` adds the deterministic execution layer that turns a validated `MappingIR` program into a pure Python converter and then validates the produced payload offline.
+`TASK-04` adds the deterministic execution layer that turns a validated `MappingIR` program into a versioned `ConverterPackage` artifact and then validates the produced payload offline.
 
 ## Flow
 
 1. `src/llm_converter/mapping_ir/validator.py` checks that a candidate program is structurally safe to execute.
-2. `src/llm_converter/compiler/compiler.py` normalizes step order, emits deterministic Python source, and loads an importable module.
+2. `src/llm_converter/compiler/compiler.py` normalizes step order, emits deterministic Python source, loads an importable module, and wraps it in a versioned `ConverterPackage`.
 3. `src/llm_converter/compiler/runtime_ops.py` provides the pure helpers used by generated modules.
 4. `src/llm_converter/validation/structural.py` validates converter output against a target `Pydantic` model.
 5. `src/llm_converter/validation/semantic.py` applies deterministic semantic assertions on top of the structural result.
@@ -16,8 +16,30 @@
 
 - Compilation is deterministic for the same `MappingIR` input.
 - Steps are topologically ordered with stable tie-breaking by original order.
+- The package manifest records the converter entry point, validation entry points, focused test surface, and a stable source digest.
 - Generated modules expose a record-level `convert(record)` callable.
 - Generated code imports only the local runtime helper module and never reaches out to a live LLM client.
+
+## ConverterPackage Contract
+
+The compiler boundary now returns an explicit `ConverterPackage` artifact instead of an unstructured in-memory result.
+
+The package keeps the existing runtime surface:
+
+- `program`
+- `module_name`
+- `source_code`
+- `module`
+- `convert(record)`
+
+In addition, it exposes:
+
+- a versioned machine-readable `manifest`
+- `to_manifest_payload()` for JSON-compatible metadata
+- `export(path)` for deterministic repo-local export of:
+  - `manifest.json`
+  - `<module_name>.py`
+  - `mapping_ir.json`
 
 ## Runtime Helpers
 
@@ -95,8 +117,9 @@ program = MappingIR(
     assignments=[TargetAssignment(step_id="copy_task_id", target_path="task.id")],
 )
 
-compiled = compile_mapping_ir(program)
-result = validate_structural_output(compiled.convert({"task_id": "T-1"}), DemoTarget)
+package = compile_mapping_ir(program)
+result = validate_structural_output(package.convert({"task_id": "T-1"}), DemoTarget)
 
 print(result.valid)
+print(package.manifest.artifact_kind)
 ```

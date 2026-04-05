@@ -50,6 +50,7 @@ Installed workflow agents:
 
 - Compiler code lives under `src/llm_converter/compiler/`.
 - Validation and acceptance code lives under `src/llm_converter/validation/`.
+- `compile_mapping_ir()` now returns a versioned `ConverterPackage` artifact that preserves `.convert(...)` while exposing deterministic manifest/export semantics for compiler outputs.
 - Focused compiler tests live under `tests/unit/compiler/`.
 - Focused validation tests live under `tests/unit/validation/`.
 - Smoke integration tests live under `tests/integration/converter_pipeline/`.

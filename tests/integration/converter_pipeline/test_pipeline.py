@@ -93,5 +93,6 @@ def test_converter_pipeline_smoke_profile_to_validation() -> None:
     )
     structural = validate_structural_output(converted, ScheduleSummary)
 
+    assert compiled.manifest.artifact_kind == "ConverterPackage"
     assert structural.valid is True
     assert converted["label"] == "Alpha-A-01"
