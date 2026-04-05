@@ -38,24 +38,26 @@ Installed workflow agents:
 
 ## TASK-03 Notes
 
-- LLM adapter code lives under `src/llm_converter/llm/`.
-- Concrete OpenAI adapter lives in `src/llm_converter/llm/openai_adapter.py`.
-- Mapping IR code lives under `src/llm_converter/mapping_ir/`.
+- LLM adapter code lives under `src/ai_converter/llm/`.
+- Concrete OpenAI adapter lives in `src/ai_converter/llm/openai_adapter.py`.
+- Mapping IR code lives under `src/ai_converter/mapping_ir/`.
 - Versioned prompt templates live under `prompts/source_schema/`, `prompts/mapping_ir/`, and `prompts/repair/`.
 - Focused mapping-ir tests live under `tests/unit/mapping_ir/`.
 - Preferred verification command for TASK-03 is `python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider`.
 - Use fake or injected adapters in unit tests; do not call live models or the network.
+- Prompt/model trace artifacts are caller-managed exports from the shared `LLMResponse.to_trace_artifact()` contract; tests must keep them offline and deterministic.
 
 ## TASK-04 Notes
 
-- Compiler code lives under `src/llm_converter/compiler/`.
-- Validation and acceptance code lives under `src/llm_converter/validation/`.
+- Compiler code lives under `src/ai_converter/compiler/`.
+- Validation and acceptance code lives under `src/ai_converter/validation/`.
 - `compile_mapping_ir()` now returns a versioned `ConverterPackage` artifact that preserves `.convert(...)` while exposing deterministic manifest/export semantics for compiler outputs.
 - Focused compiler tests live under `tests/unit/compiler/`.
 - Focused validation tests live under `tests/unit/validation/`.
 - Smoke integration tests live under `tests/integration/converter_pipeline/`.
 - Preferred verification command for TASK-04 is `python -m pytest tests/unit/mapping_ir tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider`.
 - Keep runtime compilation and repair-loop tests offline; use fake repair strategies and avoid live LLM calls or network access.
+- Acceptance reports stay JSON-exportable through `AcceptanceReport.to_trace_artifact()`, and repair-loop audit exports now include per-attempt traces plus a final decision through `RepairLoopResult.to_trace_artifact()`.
 
 ## TASK-05 Notes
 

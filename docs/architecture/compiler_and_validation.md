@@ -80,8 +80,15 @@ The acceptance suite runs a compiled converter over a deterministic dataset and 
 - `semantic_validity`
 - `coverage`
 - `repair_iterations`
+- case-level details that remain JSON-exportable through `AcceptanceReport.to_trace_artifact()`
 
 The repair loop wraps that report in a failure bundle, asks a repair strategy for a patched `MappingIR`, recompiles, and reruns acceptance until the maximum repair count is reached.
+The result now also records:
+
+- `final_decision` for the overall stop reason
+- `attempt_traces` with one audit record per attempt
+- per-attempt linkage between the failing program, failure bundle, acceptance report, and patched program when a patch is proposed
+- `RepairLoopResult.to_trace_artifact()` for one stable JSON-compatible export of the full repair trace
 
 In `TASK-04`, repair strategies are fake or stubbed in tests; live LLM repair is intentionally out of scope.
 

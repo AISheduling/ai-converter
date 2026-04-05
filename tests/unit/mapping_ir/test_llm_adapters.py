@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from pydantic import BaseModel
@@ -121,6 +122,16 @@ def test_openai_adapter_generate_text_uses_responses_create() -> None:
         "attempt": "1",
     }
     assert response.usage.total_tokens == 18
+    assert response.to_dict()["usage"]["total_tokens"] == 18
+    assert response.to_dict()["prompt"]["reference"]["family"] == "mapping_ir"
+    artifact = response.to_trace_artifact()
+    assert artifact["artifact_kind"] == "llm_response_trace"
+    assert artifact["artifact_version"] == "1.0"
+    assert artifact["raw_text"] == "plain text response"
+    assert artifact["parsed"] == "plain text response"
+    assert artifact["usage"]["total_tokens"] == 18
+    assert artifact["prompt"]["reference"]["family"] == "mapping_ir"
+    assert json.loads(json.dumps(artifact)) == artifact
 
 
 def test_openai_adapter_generate_structured_uses_responses_parse() -> None:
@@ -143,6 +154,12 @@ def test_openai_adapter_generate_structured_uses_responses_parse() -> None:
         "family": "mapping_ir",
         "scenario": "structured",
     }
+    assert response.to_dict()["parsed"] == {"message": "structured response"}
+    artifact = response.to_trace_artifact()
+    assert artifact["artifact_kind"] == "llm_response_trace"
+    assert artifact["parsed"] == {"message": "structured response"}
+    assert artifact["prompt"]["reference"]["family"] == "mapping_ir"
+    assert json.loads(json.dumps(artifact)) == artifact
 
 
 def _prompt() -> PromptEnvelope:

@@ -60,6 +60,7 @@ Tests:
 
 - `tests/unit/mapping_ir/`
 - includes offline checks for `FakeLLMAdapter` and `OpenAILLMAdapter` via injected fake client objects
+- includes prompt/reply trace export checks through `LLMResponse.to_trace_artifact()`
 
 Command:
 
@@ -83,6 +84,7 @@ Coverage notes:
 - verifies the explicit `ConverterPackage` contract
 - verifies deterministic manifest/export behavior
 - keeps the compiled converter, acceptance, and repair-loop path offline
+- verifies acceptance-report export and per-attempt repair trace export stay deterministic
 
 Command:
 

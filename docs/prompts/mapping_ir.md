@@ -30,6 +30,17 @@ Each renderer returns a `PromptEnvelope` with:
 
 Prompt family selection is explicit: `render_source_schema_prompt(...)` loads `prompts/source_schema/<version>-*.txt`, `render_mapping_ir_prompt(...)` loads `prompts/mapping_ir/<version>-*.txt`, and `render_repair_prompt(...)` loads `prompts/repair/<version>-*.txt`.
 
+## Observability artifacts
+
+`LLMResponse.to_trace_artifact()` exposes a stable JSON-compatible payload for offline persistence of:
+
+- the rendered prompt inputs
+- prompt template family/version references
+- raw model reply text
+- parsed structured payload when present
+- usage metadata
+- structured errors and deterministic request metadata
+
 ## Minimal usage
 
 ```python

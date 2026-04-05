@@ -122,7 +122,7 @@ print(card.fields[0].description)
 
 ## Use The Mapping IR API
 
-`TASK-03` adds an offline LLM-facing layer under `src/llm_converter/llm/` and `src/llm_converter/mapping_ir/`.
+`TASK-03` adds an offline LLM-facing layer under `src/ai_converter/llm/` and `src/ai_converter/mapping_ir/`.
 
 It helps you:
 
@@ -132,6 +132,7 @@ It helps you:
 - optionally enforce a centralized `schema` / `mapping` / `repair` LLM call budget with machine-readable accounting
 - build bounded repair prompts from failing fixtures
 - switch between `FakeLLMAdapter` for offline tests and `OpenAILLMAdapter` for real OpenAI-backed calls
+- persist prompt and model reply artifacts through the shared `LLMResponse.to_trace_artifact()` export surface
 
 ### Example: rank fake-backed mapping candidates
 
@@ -226,10 +227,11 @@ adapter = OpenAILLMAdapter(
 ```
 
 The OpenAI adapter uses the Responses API under the hood and keeps imports lazy, so offline tests can still run without network access by using injected fake clients.
+Every shared adapter response now exposes `response.to_trace_artifact()` so callers can persist prompt inputs, raw replies, usage, metadata, and structured errors as deterministic audit artifacts without the library writing files implicitly.
 
 ## Use The Compiler And Validation API
 
-`TASK-04` adds deterministic execution under `src/llm_converter/compiler/` and `src/llm_converter/validation/`.
+`TASK-04` adds deterministic execution under `src/ai_converter/compiler/` and `src/ai_converter/validation/`.
 
 It helps you:
 
@@ -237,7 +239,9 @@ It helps you:
 - execute the packaged converter without any live LLM calls
 - export a deterministic manifest, generated module, and normalized `MappingIR` payload
 - validate the converted payload structurally with a target `Pydantic` model
+- export acceptance and repair-loop observability artifacts for offline audit
 - run semantic assertions and bounded repair loops offline with fake patch strategies
+- export acceptance reports with `AcceptanceReport.to_trace_artifact()` and persist per-attempt repair audit traces through `RepairLoopResult.to_trace_artifact()`
 
 ### Example: compile a `MappingIR` program and validate one output
 
@@ -271,6 +275,12 @@ print(payload)
 print(result.valid)
 print(package.manifest.artifact_version)
 ```
+
+Acceptance and repair traces are also exportable for later audit.
+`AcceptanceReport.to_trace_artifact()` and `RepairLoopResult.to_trace_artifact()`
+produce deterministic JSON-compatible payloads, and `RepairLoopResult` also
+exposes `final_decision` plus `attempt_traces` so callers can persist each
+failed attempt, its failure bundle, and the patch or stop outcome deterministically.
 
 ## Use The Drift And Evaluation APIs
 

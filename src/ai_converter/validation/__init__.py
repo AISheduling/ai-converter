@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from .acceptance import AcceptanceCase, AcceptanceCaseReport, AcceptanceReport, run_acceptance_suite
-from .repair_loop import FailureBundle, RepairLoopResult, RepairStrategy, run_bounded_repair_loop
+from .repair_loop import (
+    FailureBundle,
+    RepairAttemptTrace,
+    RepairLoopResult,
+    RepairStrategy,
+    run_bounded_repair_loop,
+)
 from .semantic import (
     SemanticAssertion,
     SemanticIssue,
@@ -21,6 +27,7 @@ __all__ = [
     "AcceptanceCaseReport",
     "AcceptanceReport",
     "FailureBundle",
+    "RepairAttemptTrace",
     "RepairLoopResult",
     "RepairStrategy",
     "SemanticAssertion",

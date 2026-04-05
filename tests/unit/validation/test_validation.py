@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 
 from pydantic import BaseModel, Field
 
@@ -105,6 +106,11 @@ def test_acceptance_orchestrator_builds_report() -> None:
     assert report.structural_validity is True
     assert report.semantic_validity is True
     assert report.coverage == 1.0
+    artifact = report.to_trace_artifact()
+    assert artifact["artifact_kind"] == "acceptance_report_trace"
+    assert artifact["artifact_version"] == "1.0"
+    assert artifact["cases"][0]["name"] == "happy-path"
+    assert json.loads(json.dumps(artifact)) == artifact
 
 
 def test_bounded_repair_loop_stops_at_limit() -> None:
@@ -128,6 +134,15 @@ def test_bounded_repair_loop_stops_at_limit() -> None:
     assert result.iterations_used == 1
     assert len(result.history) == 2
     assert strategy.calls == 1
+    assert result.final_decision == "max_iterations_reached"
+    assert [trace.decision for trace in result.attempt_traces] == ["patched", "max_iterations_reached"]
+    artifact = result.to_trace_artifact()
+    assert artifact["artifact_kind"] == "repair_loop_trace"
+    assert artifact["artifact_version"] == "1.0"
+    assert artifact["attempt_traces"][0]["failure_bundle"]["attempt"] == 0
+    assert artifact["attempt_traces"][0]["patched_program"] is not None
+    assert artifact["attempt_traces"][1]["decision"] == "max_iterations_reached"
+    assert json.loads(json.dumps(artifact)) == artifact
 
 
 def test_bounded_repair_loop_succeeds_with_fake_patch_strategy() -> None:
@@ -151,6 +166,32 @@ def test_bounded_repair_loop_succeeds_with_fake_patch_strategy() -> None:
     assert result.iterations_used == 1
     assert result.final_report.coverage == 1.0
     assert strategy.calls == 1
+    assert result.final_decision == "accepted"
+    assert [trace.decision for trace in result.attempt_traces] == ["patched", "accepted"]
+    assert result.to_trace_artifact()["attempt_traces"][1]["acceptance_report"]["coverage"] == 1.0
+
+
+def test_bounded_repair_loop_records_strategy_decline() -> None:
+    """Verify that the repair trace records when the strategy stops patching.
+
+    Returns:
+        None.
+    """
+
+    strategy = _DecliningRepairStrategy()
+    result = run_bounded_repair_loop(
+        _invalid_semantic_program(),
+        _dataset(),
+        DemoTarget,
+        strategy,
+        max_repair_iterations=2,
+        module_name_prefix="repair_decline",
+    )
+
+    assert result.success is False
+    assert result.final_decision == "strategy_declined"
+    assert [trace.decision for trace in result.attempt_traces] == ["strategy_declined"]
+    assert result.to_trace_artifact()["attempt_traces"][0]["failure_bundle"]["attempt"] == 0
 
 
 def _dataset() -> list[AcceptanceCase]:
@@ -282,3 +323,25 @@ class _SinglePatchRepairStrategy:
         del program, failure_bundle
         self.calls += 1
         return _valid_program()
+
+
+@dataclass
+class _DecliningRepairStrategy:
+    """Repair strategy that explicitly stops after the first failure."""
+
+    calls: int = 0
+
+    def propose_patch(self, program: MappingIR, failure_bundle) -> MappingIR | None:
+        """Decline to produce a patch for the current failure.
+
+        Args:
+            program: Current failing MappingIR program.
+            failure_bundle: Failure context for the current attempt.
+
+        Returns:
+            ``None`` to stop the repair loop.
+        """
+
+        del program, failure_bundle
+        self.calls += 1
+        return None

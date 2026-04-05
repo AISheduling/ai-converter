@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping as MappingABC, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any, Generic, Literal, Mapping, TypeVar
 
@@ -10,6 +11,28 @@ from pydantic import BaseModel
 
 StructuredModelT = TypeVar("StructuredModelT", bound=BaseModel)
 LLMCallBudgetStage = Literal["schema", "mapping", "repair"]
+TRACE_ARTIFACT_VERSION = "1.0"
+
+
+def _json_compatible(value: Any) -> Any:
+    """Return a JSON-compatible representation of one trace value.
+
+    Args:
+        value: Arbitrary runtime value from an LLM trace structure.
+
+    Returns:
+        JSON-compatible representation suitable for deterministic export.
+    """
+
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    if isinstance(value, MappingABC):
+        return {str(key): _json_compatible(item) for key, item in value.items()}
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [_json_compatible(item) for item in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
 
 
 @dataclass(slots=True)
@@ -27,6 +50,15 @@ class PromptTemplateReference:
     version: str
     system_path: str
     user_path: str
+
+    def to_dict(self) -> dict[str, str]:
+        """Return a machine-readable representation of the prompt reference.
+
+        Returns:
+            Dictionary with prompt family, version, and template paths.
+        """
+
+        return asdict(self)
 
 
 @dataclass(slots=True)
@@ -48,6 +80,22 @@ class PromptEnvelope:
     user_prompt: str
     reference: PromptTemplateReference
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a machine-readable representation of the rendered prompt.
+
+        Returns:
+            Dictionary with rendered prompt content and template identity.
+        """
+
+        return {
+            "name": self.name,
+            "version": self.version,
+            "system_prompt": self.system_prompt,
+            "user_prompt": self.user_prompt,
+            "reference": self.reference.to_dict(),
+            "metadata": _json_compatible(self.metadata),
+        }
 
 
 @dataclass(slots=True)
@@ -88,6 +136,15 @@ class LLMError:
     message: str
     retryable: bool = False
 
+    def to_dict(self) -> dict[str, Any]:
+        """Return a machine-readable representation of one adapter error.
+
+        Returns:
+            Dictionary with the error code, message, and retryability.
+        """
+
+        return asdict(self)
+
 
 @dataclass(slots=True)
 class LLMResponse(Generic[StructuredModelT]):
@@ -118,6 +175,44 @@ class LLMResponse(Generic[StructuredModelT]):
         """
 
         return not self.errors
+
+    def to_trace_artifact(self) -> dict[str, Any]:
+        """Return one stable JSON-compatible observability artifact.
+
+        Returns:
+            Dictionary containing the prompt, raw response, parsed payload,
+            usage, metadata, and structured errors for offline persistence.
+        """
+
+        return {
+            "artifact_kind": "llm_response_trace",
+            "artifact_version": TRACE_ARTIFACT_VERSION,
+            "ok": self.ok,
+            "raw_text": self.raw_text,
+            "parsed": _json_compatible(self.parsed),
+            "usage": self.usage.to_dict(),
+            "metadata": _json_compatible(self.metadata),
+            "errors": [error.to_dict() for error in self.errors],
+            "prompt": self.prompt.to_dict() if self.prompt is not None else None,
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a machine-readable prompt/response trace artifact.
+
+        Returns:
+            Dictionary containing prompt inputs, model reply data, usage, and
+            structured diagnostics suitable for caller-managed persistence.
+        """
+
+        return {
+            "raw_text": self.raw_text,
+            "parsed": _json_compatible(self.parsed),
+            "usage": self.usage.to_dict(),
+            "metadata": _json_compatible(self.metadata),
+            "errors": [error.to_dict() for error in self.errors],
+            "prompt": self.prompt.to_dict() if self.prompt is not None else None,
+            "ok": self.ok,
+        }
 
 
 @dataclass(slots=True)

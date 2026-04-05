@@ -10,6 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from .semantic import SemanticAssertion, SemanticIssue, validate_semantic_output
 from .structural import StructuralIssue, validate_structural_output
 
+TRACE_ARTIFACT_VERSION = "1.0"
+
 
 class AcceptanceCase(BaseModel):
     """One fixture case executed by the acceptance suite."""
@@ -35,6 +37,15 @@ class AcceptanceCaseReport(BaseModel):
     structural_issues: list[StructuralIssue] = Field(default_factory=list)
     semantic_issues: list[SemanticIssue] = Field(default_factory=list)
 
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic export payload for one acceptance case.
+
+        Returns:
+            JSON-compatible case report for caller-managed persistence.
+        """
+
+        return self.model_dump(mode="json")
+
 
 class AcceptanceReport(BaseModel):
     """Aggregate acceptance result across a fixture dataset."""
@@ -48,6 +59,30 @@ class AcceptanceReport(BaseModel):
     repair_iterations: int = 0
     compiler_error: str | None = None
     cases: list[AcceptanceCaseReport] = Field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic export payload for one acceptance run.
+
+        Returns:
+            JSON-compatible report with aggregate and case-level results.
+        """
+
+        payload = self.model_dump(mode="json")
+        payload["cases"] = [case.to_dict() for case in self.cases]
+        return payload
+
+    def to_trace_artifact(self) -> dict[str, Any]:
+        """Return one stable JSON-compatible acceptance trace artifact.
+
+        Returns:
+            Dictionary suitable for offline persistence and later audit.
+        """
+
+        return {
+            "artifact_kind": "acceptance_report_trace",
+            "artifact_version": TRACE_ARTIFACT_VERSION,
+            **self.model_dump(mode="json"),
+        }
 
 
 def run_acceptance_suite(
