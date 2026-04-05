@@ -20,6 +20,35 @@
 - `SourceSchemaSpec` aggregation is deterministic and input-order independent.
 - Evidence packing uses a deterministic character-budget approximation instead of tokenizer-specific accounting.
 
+## Minimal flow
+
+The normal TASK-02 handoff looks like this:
+
+1. Start from a deterministic `ProfileReport`.
+2. Normalize or merge source-side fields into one `SourceSchemaSpec`.
+3. Export the target `Pydantic` model into a compact `TargetSchemaCard`.
+4. Pack the profiling report into a bounded evidence bundle for later prompt rendering.
+
+```python
+from pydantic import BaseModel, Field
+
+from llm_converter.profiling import build_profile_report
+from llm_converter.schema import build_target_schema_card, pack_profile_evidence
+
+
+class DemoTask(BaseModel):
+    id: str = Field(description="Task identifier")
+
+
+report = build_profile_report("tests/fixtures/profiling/projects.json")
+card = build_target_schema_card(DemoTask)
+bundle = pack_profile_evidence(report, budget=1400, mode="balanced")
+
+print(report.schema_fingerprint)
+print(card.model_name)
+print(bundle.summary.field_count)
+```
+
 ## Focused verification
 
 Run the TASK-02 focused test suite with:

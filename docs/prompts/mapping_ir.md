@@ -28,6 +28,36 @@ Each renderer returns a `PromptEnvelope` with:
 - prompt family/version reference
 - deterministic metadata for downstream tracing
 
+Prompt family selection is explicit: `render_source_schema_prompt(...)` loads `prompts/source_schema/<version>-*.txt`, `render_mapping_ir_prompt(...)` loads `prompts/mapping_ir/<version>-*.txt`, and `render_repair_prompt(...)` loads `prompts/repair/<version>-*.txt`.
+
+## Minimal usage
+
+```python
+from pydantic import BaseModel
+
+from llm_converter.llm.prompt_renderers import render_mapping_ir_prompt
+from llm_converter.schema import SourceFieldSpec, SourceSchemaSpec, build_target_schema_card
+
+
+class DemoTask(BaseModel):
+    id: str
+
+
+source_schema = SourceSchemaSpec(
+    source_name="demo",
+    source_format="json",
+    root_type="list",
+    fields=[SourceFieldSpec(path="task_id", semantic_name="task_id", dtype="str")],
+)
+target_schema = build_target_schema_card(DemoTask)
+
+prompt = render_mapping_ir_prompt(source_schema, target_schema, version="v1")
+
+print(prompt.reference.family)
+print(prompt.reference.version)
+print(prompt.user_prompt[:120])
+```
+
 ## Offline testing
 
 The fake adapter in `src/llm_converter/llm/fake_client.py` consumes queued `FakeLLMReply` objects and validates structured outputs locally against Pydantic models.

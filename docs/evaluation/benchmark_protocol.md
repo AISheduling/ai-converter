@@ -4,6 +4,10 @@
 
 The benchmark harness is intentionally library-first. It does not require a CLI or any network access.
 
+## Why this exists
+
+Use acceptance tests when you need a pass/fail verdict for one compiled converter against a bounded fixture set. Use benchmarks when you need comparative metrics across multiple subjects, scenarios, or patch strategies and want JSON, CSV, and Markdown report artifacts you can inspect or archive.
+
 ### Inputs
 
 - `BenchmarkSubject`
@@ -37,6 +41,8 @@ Use `export_benchmark_reports(...)` to write:
 - JSON for machine-readable result ingestion
 - CSV for flattened per-case comparisons
 - Markdown for quick scenario and baseline review
+
+The helper returns the concrete output paths, and the exported files are typically written into a repo-local directory such as `benchmark_artifacts/`.
 
 ### Minimal Workflow
 

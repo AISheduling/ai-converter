@@ -366,6 +366,12 @@ class MappingIRValidator:
         issues: list[ValidationIssue] = []
 
         def visit(node: str) -> None:
+            """Walk one dependency node while tracking active recursion state.
+
+            Args:
+                node: Step id currently being visited in the dependency graph.
+            """
+
             if node in visited or node in visiting:
                 return
             visiting.add(node)

@@ -2,6 +2,8 @@
 
 `ai-converter` is a deterministic Python library for preparing free-form `L0` schedule data for later conversion into a fixed `L1` DSL.
 
+It exists to make the early conversion pipeline reproducible before any live model call happens: profile messy inputs, derive stable contracts, synthesize or validate mapping plans offline, and benchmark the resulting converters with deterministic fixtures.
+
 At the current stage the library gives you six main building blocks:
 
 - profiling raw `CSV`, `JSON`, and `JSONL` inputs into a stable `ProfileReport`
@@ -22,6 +24,30 @@ Install it in editable mode from the repository root:
 ```bash
 python -m pip install -e .
 ```
+
+## Quickstart
+
+Use this shortest-path flow to verify the repository on a fresh checkout:
+
+1. Install the package in editable mode.
+2. Run one focused suite:
+
+```bash
+poetry run python -m pytest tests/unit/profiling -q -p no:cacheprovider
+```
+
+3. Execute one minimal API example:
+
+```python
+from llm_converter.profiling import build_profile_report
+
+report = build_profile_report("tests/fixtures/profiling/projects.json")
+
+print(report.record_count)
+print(report.schema_fingerprint)
+```
+
+If you want the broader verification matrix, use [tests/README.md](tests/README.md).
 
 ## Use The Profiling API
 

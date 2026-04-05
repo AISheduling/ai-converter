@@ -15,7 +15,15 @@ from .sampling import select_representative_samples
 
 
 def build_profile_report(path_or_input: str | Path | LoadedInput, *, sample_limit: int = 3) -> ProfileReport:
-    """Load a dataset and return its normalized profile report."""
+    """Load a dataset and return its normalized profile report.
+
+    Args:
+        path_or_input: File path or in-memory input to profile.
+        sample_limit: Maximum number of representative samples to retain.
+
+    Returns:
+        Deterministic profile report for the provided source data.
+    """
 
     dataset = _ensure_loaded_dataset(path_or_input)
     flattened_records = _flatten_records(dataset)
@@ -41,7 +49,14 @@ def build_profile_report(path_or_input: str | Path | LoadedInput, *, sample_limi
 
 
 def _ensure_loaded_dataset(path_or_input: str | Path | LoadedInput) -> LoadedDataset:
-    """Convert file paths or in-memory inputs into a sorted loaded dataset."""
+    """Convert file paths or in-memory inputs into a sorted loaded dataset.
+
+    Args:
+        path_or_input: File path or in-memory input to normalize.
+
+    Returns:
+        Loaded dataset sorted into deterministic record order.
+    """
 
     if isinstance(path_or_input, LoadedInput):
         return LoadedDataset(
@@ -58,7 +73,14 @@ def _ensure_loaded_dataset(path_or_input: str | Path | LoadedInput) -> LoadedDat
 
 
 def _flatten_records(dataset: LoadedDataset) -> list[dict[str, list[Any]]]:
-    """Flatten normalized records according to the source format."""
+    """Flatten normalized records according to the source format.
+
+    Args:
+        dataset: Loaded dataset whose records should be flattened.
+
+    Returns:
+        Flattened path-to-values records ready for statistics collection.
+    """
 
     if dataset.source_format == "csv":
         return [flatten_csv_record(record) for record in dataset.records]
@@ -69,7 +91,15 @@ def _build_field_profiles(
     dataset: LoadedDataset,
     flattened_records: list[dict[str, list[Any]]],
 ) -> list[FieldProfile]:
-    """Build deterministic field-profile statistics from flattened records."""
+    """Build deterministic field-profile statistics from flattened records.
+
+    Args:
+        dataset: Loaded dataset that supplies metadata and field aliases.
+        flattened_records: Flattened records used to derive field statistics.
+
+    Returns:
+        Deterministically ordered field profiles for the dataset.
+    """
 
     all_paths = sorted({path for record in flattened_records for path in record})
     profiles: list[FieldProfile] = []
@@ -134,7 +164,14 @@ def _build_field_profiles(
 
 
 def _range_summary(values: list[float]) -> ScalarSummary | None:
-    """Build a scalar summary for a non-empty list of numeric values."""
+    """Build a scalar summary for a non-empty list of numeric values.
+
+    Args:
+        values: Numeric values to summarize.
+
+    Returns:
+        Scalar summary for the values, or `None` when the input is empty.
+    """
 
     if not values:
         return None
@@ -142,7 +179,14 @@ def _range_summary(values: list[float]) -> ScalarSummary | None:
 
 
 def _top_values(counter: Counter[str]) -> list[ValueCount]:
-    """Return the most frequent scalar values in deterministic order."""
+    """Return the most frequent scalar values in deterministic order.
+
+    Args:
+        counter: Scalar value frequencies collected during profiling.
+
+    Returns:
+        Top scalar values ordered by count and stable tie-breaking.
+    """
 
     return [
         ValueCount(value=value, count=count)
@@ -151,7 +195,14 @@ def _top_values(counter: Counter[str]) -> list[ValueCount]:
 
 
 def _type_name(value: Any) -> str:
-    """Return the normalized profiling type label for a Python value."""
+    """Return the normalized profiling type label for a Python value.
+
+    Args:
+        value: Python value observed in a flattened record.
+
+    Returns:
+        Normalized profiling type label for the value.
+    """
 
     if value is None:
         return "null"
@@ -169,7 +220,14 @@ def _type_name(value: Any) -> str:
 
 
 def _stable_repr(value: Any) -> str:
-    """Serialize a value into a deterministic string representation."""
+    """Serialize a value into a deterministic string representation.
+
+    Args:
+        value: Python value to serialize deterministically.
+
+    Returns:
+        Stable string representation suitable for sorting and comparison.
+    """
 
     if isinstance(value, (dict, list)):
         import json
@@ -179,7 +237,15 @@ def _stable_repr(value: Any) -> str:
 
 
 def _max_array_length(path: str, flattened_records: list[dict[str, list[Any]]]) -> int | None:
-    """Return the maximum observed array length for an array-item path."""
+    """Return the maximum observed array length for an array-item path.
+
+    Args:
+        path: Flattened array-item path to inspect.
+        flattened_records: Flattened records collected during profiling.
+
+    Returns:
+        Maximum observed array length for the parent array, or `None`.
+    """
 
     if not path.endswith("[]"):
         return None

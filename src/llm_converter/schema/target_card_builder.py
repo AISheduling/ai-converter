@@ -13,7 +13,14 @@ from .target_card_models import TargetFieldCard, TargetSchemaCard
 
 
 def build_target_schema_card(model_type: type[BaseModel]) -> TargetSchemaCard:
-    """Build a compact schema card from a Pydantic model class."""
+    """Build a compact schema card from a Pydantic model class.
+
+    Args:
+        model_type: Pydantic model class to export.
+
+    Returns:
+        Compact target schema card derived from the model class.
+    """
 
     return TargetSchemaCard(
         model_name=model_type.__name__,
@@ -24,7 +31,17 @@ def build_target_schema_card(model_type: type[BaseModel]) -> TargetSchemaCard:
 
 
 def _build_field_card(name: str, annotation: Any, field_info: Any, path: str) -> TargetFieldCard:
-    """Build a compact target-card field, including nested child fields."""
+    """Build a compact target-card field, including nested child fields.
+
+    Args:
+        name: Field name inside the current model.
+        annotation: Resolved field annotation to inspect.
+        field_info: Pydantic field metadata for the field.
+        path: Canonical dotted path for the field.
+
+    Returns:
+        Target field card with nested child fields when applicable.
+    """
 
     base_annotation, required = _unwrap_optional(annotation, field_info.is_required())
     nested_model = _extract_model(base_annotation)
@@ -60,7 +77,15 @@ def _build_field_card(name: str, annotation: Any, field_info: Any, path: str) ->
 
 
 def _unwrap_optional(annotation: Any, required: bool) -> tuple[Any, bool]:
-    """Unwrap optional annotations and derive the required flag."""
+    """Unwrap optional annotations and derive the required flag.
+
+    Args:
+        annotation: Field annotation that may encode optionality.
+        required: Whether the original field is required according to Pydantic.
+
+    Returns:
+        Tuple of the unwrapped annotation and the derived required flag.
+    """
 
     origin = get_origin(annotation)
     if origin in (UnionType, getattr(__import__("typing"), "Union")):
@@ -71,7 +96,14 @@ def _unwrap_optional(annotation: Any, required: bool) -> tuple[Any, bool]:
 
 
 def _extract_model(annotation: Any) -> type[BaseModel] | None:
-    """Return the nested Pydantic model type for an annotation, if any."""
+    """Return the nested Pydantic model type for an annotation, if any.
+
+    Args:
+        annotation: Field annotation to inspect.
+
+    Returns:
+        Nested Pydantic model type, or `None` when the annotation is not model-backed.
+    """
 
     origin = get_origin(annotation)
     if origin in (list, tuple, set):
@@ -83,7 +115,14 @@ def _extract_model(annotation: Any) -> type[BaseModel] | None:
 
 
 def _extract_enum_values(annotation: Any) -> list[str]:
-    """Extract literal or enum values from an annotation."""
+    """Extract literal or enum values from an annotation.
+
+    Args:
+        annotation: Field annotation to inspect.
+
+    Returns:
+        Sorted literal or enum values rendered as strings.
+    """
 
     origin = get_origin(annotation)
     if origin is Literal:
@@ -94,7 +133,14 @@ def _extract_enum_values(annotation: Any) -> list[str]:
 
 
 def _render_type_label(annotation: Any) -> str:
-    """Render a compact string label for a field annotation."""
+    """Render a compact string label for a field annotation.
+
+    Args:
+        annotation: Field annotation to render.
+
+    Returns:
+        Compact human-readable type label for the annotation.
+    """
 
     origin = get_origin(annotation)
     if origin is Literal:
@@ -114,7 +160,14 @@ def _render_type_label(annotation: Any) -> str:
 
 
 def _stringify_default(default: Any) -> Any:
-    """Normalize default values for inclusion in a schema card."""
+    """Normalize default values for inclusion in a schema card.
+
+    Args:
+        default: Raw default value from the Pydantic field.
+
+    Returns:
+        JSON-friendly default value representation for the schema card.
+    """
 
     if default is None:
         return None
@@ -124,7 +177,14 @@ def _stringify_default(default: Any) -> Any:
 
 
 def _clean_docstring(value: str | None) -> str | None:
-    """Normalize a docstring into a stripped summary string."""
+    """Normalize a docstring into a stripped summary string.
+
+    Args:
+        value: Raw docstring value to normalize.
+
+    Returns:
+        Stripped summary string, or `None` when the docstring is empty.
+    """
 
     if value is None:
         return None

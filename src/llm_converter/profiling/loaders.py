@@ -10,7 +10,14 @@ from typing import Any
 
 
 def normalize_name(name: str) -> str:
-    """Normalize source field names into stable internal path segments."""
+    """Normalize source field names into stable internal path segments.
+
+    Args:
+        name: Raw source field name from an input payload.
+
+    Returns:
+        Stable lowercase identifier used for normalized paths.
+    """
 
     collapsed = "_".join(name.strip().split())
     return collapsed.lower()
@@ -41,7 +48,14 @@ class LoadedInput:
 
 
 def load_dataset(path: str | Path) -> LoadedDataset:
-    """Load a supported file into normalized record dictionaries."""
+    """Load a supported file into normalized record dictionaries.
+
+    Args:
+        path: Repository-local path to a CSV, JSON, or JSONL source file.
+
+    Returns:
+        Normalized dataset representation for the input file.
+    """
 
     source_path = Path(path)
     suffix = source_path.suffix.lower()
@@ -55,7 +69,14 @@ def load_dataset(path: str | Path) -> LoadedDataset:
 
 
 def _load_csv(path: Path) -> LoadedDataset:
-    """Load a CSV file into normalized row dictionaries."""
+    """Load a CSV file into normalized row dictionaries.
+
+    Args:
+        path: Path to the CSV file to load.
+
+    Returns:
+        Loaded dataset with normalized CSV records and alias metadata.
+    """
 
     with path.open("r", encoding="utf-8", newline="") as handle:
         sample = handle.read(2048)
@@ -92,7 +113,14 @@ def _load_csv(path: Path) -> LoadedDataset:
 
 
 def _load_json(path: Path) -> LoadedDataset:
-    """Load a JSON file into normalized records and root metadata."""
+    """Load a JSON file into normalized records and root metadata.
+
+    Args:
+        path: Path to the JSON file to load.
+
+    Returns:
+        Loaded dataset with normalized JSON records and root metadata.
+    """
 
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
@@ -109,7 +137,14 @@ def _load_json(path: Path) -> LoadedDataset:
 
 
 def _load_jsonl(path: Path) -> LoadedDataset:
-    """Load a JSONL file into normalized row dictionaries."""
+    """Load a JSONL file into normalized row dictionaries.
+
+    Args:
+        path: Path to the JSONL file to load.
+
+    Returns:
+        Loaded dataset with normalized JSONL records.
+    """
 
     records: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
@@ -132,7 +167,14 @@ def _load_jsonl(path: Path) -> LoadedDataset:
 
 
 def _records_from_json_payload(payload: Any) -> tuple[list[dict[str, Any]], str]:
-    """Normalize a JSON payload into records plus a root-type label."""
+    """Normalize a JSON payload into records plus a root-type label.
+
+    Args:
+        payload: Parsed JSON payload to normalize.
+
+    Returns:
+        Tuple of normalized record dictionaries and the inferred root type.
+    """
 
     if isinstance(payload, dict):
         return [payload], "object"

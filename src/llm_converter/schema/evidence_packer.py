@@ -71,7 +71,17 @@ def pack_profile_evidence(
     mode: EvidencePackMode = "balanced",
     format_hint: str | None = None,
 ) -> PackedEvidenceBundle:
-    """Pack a profile report into a deterministic budgeted evidence bundle."""
+    """Pack a profile report into a deterministic budgeted evidence bundle.
+
+    Args:
+        report: Profile report to compress into prompt-oriented evidence.
+        budget: Maximum serialized size budget for the packed bundle.
+        mode: Packing mode that controls field and sample limits.
+        format_hint: Optional human-readable description of the source format.
+
+    Returns:
+        Deterministic evidence bundle that fits the requested packing mode and budget.
+    """
 
     field_limit, sample_limit = _MODE_LIMITS[mode]
     bundle = PackedEvidenceBundle(
@@ -126,7 +136,14 @@ def pack_profile_evidence(
 
 
 def _pack_field(field: FieldProfile) -> PackedFieldEvidence:
-    """Convert a field profile into compact packed evidence."""
+    """Convert a field profile into compact packed evidence.
+
+    Args:
+        field: Field profile to convert into prompt-oriented evidence.
+
+    Returns:
+        Packed field evidence derived from the field profile.
+    """
 
     return PackedFieldEvidence(
         path=field.path,
@@ -142,7 +159,14 @@ def _pack_field(field: FieldProfile) -> PackedFieldEvidence:
 
 
 def _pack_sample(sample: SampleRecord) -> PackedSampleEvidence:
-    """Convert a representative sample into compact packed evidence."""
+    """Convert a representative sample into compact packed evidence.
+
+    Args:
+        sample: Representative sample to convert.
+
+    Returns:
+        Packed sample evidence derived from the representative record.
+    """
 
     return PackedSampleEvidence(
         index=sample.index,
@@ -153,13 +177,28 @@ def _pack_sample(sample: SampleRecord) -> PackedSampleEvidence:
 
 
 def _estimate_size(bundle: PackedEvidenceBundle) -> int:
-    """Estimate the serialized size of an evidence bundle."""
+    """Estimate the serialized size of an evidence bundle.
+
+    Args:
+        bundle: Evidence bundle to size.
+
+    Returns:
+        Serialized JSON character count for the bundle.
+    """
 
     return len(json.dumps(bundle.model_dump(mode="json"), sort_keys=True, ensure_ascii=True))
 
 
 def _ensure_at_least_one_sample(bundle: PackedEvidenceBundle, sample: SampleRecord) -> PackedEvidenceBundle:
-    """Try to preserve at least one representative sample within the budget."""
+    """Try to preserve at least one representative sample within the budget.
+
+    Args:
+        bundle: Current packed evidence bundle under construction.
+        sample: Representative sample to preserve if possible.
+
+    Returns:
+        Adjusted bundle that keeps at least one sample when the budget allows it.
+    """
 
     candidate = bundle.model_copy(deep=True)
     while candidate.fields:
@@ -174,7 +213,14 @@ def _ensure_at_least_one_sample(bundle: PackedEvidenceBundle, sample: SampleReco
 
 
 def _field_score(field: FieldProfile) -> float:
-    """Score a field profile by how valuable it is for packed evidence."""
+    """Score a field profile by how valuable it is for packed evidence.
+
+    Args:
+        field: Field profile to score for evidence selection.
+
+    Returns:
+        Heuristic score for prioritizing the field in packed evidence.
+    """
 
     score = field.present_ratio + field.unique_ratio
     if field.candidate_id:

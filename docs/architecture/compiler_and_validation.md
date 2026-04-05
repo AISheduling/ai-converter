@@ -62,3 +62,41 @@ The acceptance suite runs a compiled converter over a deterministic dataset and 
 The repair loop wraps that report in a failure bundle, asks a repair strategy for a patched `MappingIR`, recompiles, and reruns acceptance until the maximum repair count is reached.
 
 In `TASK-04`, repair strategies are fake or stubbed in tests; live LLM repair is intentionally out of scope.
+
+## Minimal usage
+
+Run the focused compiler and validation checks with:
+
+```bash
+poetry run python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider
+```
+
+Compile one mapping and validate the output with:
+
+```python
+from pydantic import BaseModel
+
+from llm_converter.compiler import compile_mapping_ir
+from llm_converter.mapping_ir import MappingIR, MappingStep, SourceReference, StepOperation, TargetAssignment
+from llm_converter.validation import validate_structural_output
+
+
+class DemoTask(BaseModel):
+    id: str
+
+
+class DemoTarget(BaseModel):
+    task: DemoTask
+
+
+program = MappingIR(
+    source_refs=[SourceReference(id="src_task_id", path="task_id", dtype="str")],
+    steps=[MappingStep(id="copy_task_id", operation=StepOperation(kind="copy", source_ref="src_task_id"))],
+    assignments=[TargetAssignment(step_id="copy_task_id", target_path="task.id")],
+)
+
+compiled = compile_mapping_ir(program)
+result = validate_structural_output(compiled.convert({"task_id": "T-1"}), DemoTarget)
+
+print(result.valid)
+```

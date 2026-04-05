@@ -141,7 +141,11 @@ def test_source_spec_normalizer_is_deterministic() -> None:
 
 
 def _load_dsl_schema_module():
-    """Load the external DSL schema module directly from disk for tests."""
+    """Load the external DSL schema module directly from disk for tests.
+
+    Returns:
+        Imported DSL schema module used by the target-card tests.
+    """
 
     module_path = ROOT / "dsl-core" / "dsl_schema.py"
     spec = importlib.util.spec_from_file_location("task02_dsl_schema", module_path)
@@ -153,7 +157,14 @@ def _load_dsl_schema_module():
 
 
 def _collect_paths(fields: list[dict]) -> list[str]:
-    """Collect flattened target-card paths from nested field dictionaries."""
+    """Collect flattened target-card paths from nested field dictionaries.
+
+    Args:
+        fields: Nested target-card field payloads to flatten.
+
+    Returns:
+        Flattened list of field paths.
+    """
 
     result: list[str] = []
     for field in fields:
@@ -163,13 +174,27 @@ def _collect_paths(fields: list[dict]) -> list[str]:
 
 
 def _field_map(fields: list[dict]) -> dict[str, dict]:
-    """Map flattened target-card field dictionaries by path."""
+    """Map flattened target-card field dictionaries by path.
+
+    Args:
+        fields: Nested target-card field payloads to index.
+
+    Returns:
+        Field payloads keyed by canonical path.
+    """
 
     return {path: field for field in fields for path, field in _flatten_field(field)}
 
 
 def _flatten_field(field: dict) -> list[tuple[str, dict]]:
-    """Flatten one nested target-card field tree into path-field pairs."""
+    """Flatten one nested target-card field tree into path-field pairs.
+
+    Args:
+        field: Nested target-card field payload to flatten.
+
+    Returns:
+        Ordered path-field pairs for the field subtree.
+    """
 
     pairs = [(field["path"], field)]
     for child in field["children"]:

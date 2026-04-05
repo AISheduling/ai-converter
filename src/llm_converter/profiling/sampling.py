@@ -28,7 +28,17 @@ def select_representative_samples(
     limit: int | None = None,
     max_samples: int | None = None,
 ):
-    """Select records that maximize coverage and rare-structure exposure."""
+    """Select records that maximize coverage and rare-structure exposure.
+
+    Args:
+        candidates_or_records: Precomputed candidates or flattened records.
+        raw_records: Raw records paired with flattened records when sampling from data.
+        limit: Preferred maximum sample count for flattened-record mode.
+        max_samples: Preferred maximum sample count for candidate mode.
+
+    Returns:
+        Representative sample records or sampling candidates, depending on input mode.
+    """
 
     if candidates_or_records and isinstance(candidates_or_records[0], SamplingCandidate):
         effective_limit = max_samples if max_samples is not None else limit
@@ -44,7 +54,16 @@ def _select_from_flattened(
     raw_records: list[dict[str, Any]],
     limit: int,
 ) -> list[SampleRecord]:
-    """Select representative samples from flattened records."""
+    """Select representative samples from flattened records.
+
+    Args:
+        flattened_records: Flattened records scored for structural coverage.
+        raw_records: Raw records paired with the flattened records.
+        limit: Maximum number of samples to return.
+
+    Returns:
+        Deterministic representative samples for the provided records.
+    """
 
     limit = max(0, min(limit, len(raw_records)))
     if limit == 0:
@@ -95,7 +114,15 @@ def _select_from_flattened(
 
 
 def _select_from_candidates(candidates: list[SamplingCandidate], limit: int) -> list[SamplingCandidate]:
-    """Select representative candidates from precomputed sampling inputs."""
+    """Select representative candidates from precomputed sampling inputs.
+
+    Args:
+        candidates: Precomputed sampling candidates to rank.
+        limit: Maximum number of candidates to return.
+
+    Returns:
+        Deterministically selected sampling candidates with coverage annotations.
+    """
 
     effective_limit = max(0, min(limit, len(candidates)))
     selected: list[SamplingCandidate] = []
@@ -130,7 +157,17 @@ def _score_record(
     path_counts: Counter[str],
     typed_path_counts: Counter[tuple[str, str]],
 ) -> tuple[float, list[str]]:
-    """Score a flattened record by coverage, completeness, and rarity."""
+    """Score a flattened record by coverage, completeness, and rarity.
+
+    Args:
+        flattened: Flattened record to score.
+        covered_paths: Paths already covered by previously selected samples.
+        path_counts: Global path frequencies across the dataset.
+        typed_path_counts: Global typed-path frequencies across the dataset.
+
+    Returns:
+        Tuple of the aggregate score and the record's sorted paths.
+    """
 
     record_paths = sorted(flattened)
     new_paths = [path for path in record_paths if path not in covered_paths]
@@ -150,7 +187,14 @@ def _score_record(
 
 
 def _type_name(value: Any) -> str:
-    """Return the normalized sampling type label for a Python value."""
+    """Return the normalized sampling type label for a Python value.
+
+    Args:
+        value: Python value observed while scoring samples.
+
+    Returns:
+        Normalized sampling type label for the value.
+    """
 
     if value is None:
         return "null"

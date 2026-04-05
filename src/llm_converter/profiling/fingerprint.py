@@ -9,7 +9,14 @@ from .models import FieldProfile, ProfileReport
 
 
 def compute_profile_fingerprint(fields: list[FieldProfile]) -> str:
-    """Hash only stable structural attributes of field profiles."""
+    """Hash only stable structural attributes of field profiles.
+
+    Args:
+        fields: Field profiles to include in the deterministic fingerprint.
+
+    Returns:
+        Stable SHA-256 fingerprint for the provided field profiles.
+    """
 
     canonical_fields = [
         {
@@ -26,6 +33,13 @@ def compute_profile_fingerprint(fields: list[FieldProfile]) -> str:
 
 
 def fingerprint_report(report: ProfileReport) -> str:
-    """Compute a fingerprint for a complete profile report."""
+    """Compute a fingerprint for a complete profile report.
+
+    Args:
+        report: Profile report whose field profiles should be hashed.
+
+    Returns:
+        Stable fingerprint for the report.
+    """
 
     return compute_profile_fingerprint(report.field_profiles)

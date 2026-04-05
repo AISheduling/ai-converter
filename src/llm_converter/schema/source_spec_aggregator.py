@@ -11,7 +11,14 @@ from .source_spec_normalizer import normalize_source_schema_spec
 
 
 def merge_source_schema_candidates(candidates: Iterable[SourceSchemaSpec]) -> SourceSchemaSpec:
-    """Merge multiple source-schema candidates into one deterministic schema."""
+    """Merge multiple source-schema candidates into one deterministic schema.
+
+    Args:
+        candidates: Source-schema candidates to normalize and merge.
+
+    Returns:
+        Deterministic merged source schema candidate.
+    """
 
     normalized_candidates = [normalize_source_schema_spec(candidate) for candidate in candidates]
     if not normalized_candidates:
@@ -44,7 +51,14 @@ class _FieldCluster:
     fields: list[SourceFieldSpec]
 
     def matches(self, other: SourceFieldSpec) -> bool:
-        """Return whether another field belongs to this cluster."""
+        """Return whether another field belongs to this cluster.
+
+        Args:
+            other: Source field candidate to compare against the cluster.
+
+        Returns:
+            `True` when the field should merge into this cluster.
+        """
 
         current = self.build_field()
         if current.path == other.path:
@@ -54,13 +68,21 @@ class _FieldCluster:
         return bool(set(current.aliases) & set(other.aliases))
 
     def sort_key(self) -> tuple[str, str]:
-        """Return deterministic sorting key for the merged field."""
+        """Return deterministic sorting key for the merged field.
+
+        Returns:
+            Tuple used to sort merged fields deterministically.
+        """
 
         field = self.build_field()
         return (field.semantic_name, field.path)
 
     def build_field(self) -> SourceFieldSpec:
-        """Build the merged field view for this cluster."""
+        """Build the merged field view for this cluster.
+
+        Returns:
+            Merged source field synthesized from the clustered candidates.
+        """
 
         paths = Counter(field.path for field in self.fields)
         semantic_names = Counter(field.semantic_name for field in self.fields)
@@ -88,7 +110,14 @@ class _FieldCluster:
 
 
 def _pick_counter_value(counter: Counter[str | None]) -> str:
-    """Select the most frequent counter value with deterministic tie-breaking."""
+    """Select the most frequent counter value with deterministic tie-breaking.
+
+    Args:
+        counter: Counter whose most stable value should be selected.
+
+    Returns:
+        Most frequent non-null counter value after deterministic tie-breaking.
+    """
 
     ranked = sorted(counter.items(), key=lambda item: (-item[1], str(item[0])))
     value = ranked[0][0]

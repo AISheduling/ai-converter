@@ -84,12 +84,20 @@ class ProfileReport(BaseModel):
 
     @property
     def fields(self) -> list[FieldProfile]:
-        """Compatibility alias for TASK-01 report consumers."""
+        """Compatibility alias for TASK-01 report consumers.
+
+        Returns:
+            Field profiles from the canonical report payload.
+        """
 
         return self.field_profiles
 
     @property
     def fingerprint(self) -> str:
-        """Compatibility alias for TASK-01 report consumers."""
+        """Compatibility alias for TASK-01 report consumers.
+
+        Returns:
+            Stable schema fingerprint for the report.
+        """
 
         return self.schema_fingerprint

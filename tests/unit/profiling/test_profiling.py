@@ -16,13 +16,27 @@ FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "profiling"
 
 
 def _field_map(report):
-    """Map field-profile entries by normalized path."""
+    """Map field-profile entries by normalized path.
+
+    Args:
+        report: Profile report whose fields should be indexed.
+
+    Returns:
+        Dictionary of field profiles keyed by normalized path.
+    """
 
     return {field.path: field for field in report.field_profiles}
 
 
 def _report_without_path(report):
-    """Return a serialized report with the source path removed."""
+    """Return a serialized report with the source path removed.
+
+    Args:
+        report: Profile report to serialize for stable comparison.
+
+    Returns:
+        Serialized report payload with the source path cleared.
+    """
 
     payload = report.model_dump()
     payload["source"]["path"] = None

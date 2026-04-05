@@ -2,6 +2,8 @@
 
 This file contains the repository's test-running instructions.
 
+The test tree exists to prove that each pipeline stage stays deterministic, offline, and safe to run without live LLM calls.
+
 Run all commands from the repository root:
 
 `ai-converter`
@@ -107,36 +109,36 @@ Use this when you touch the offline pipeline from mapping-ir through compiled ex
 python -m pytest tests/unit/profiling tests/unit/schema tests/unit/mapping_ir tests/unit/compiler tests/unit/validation tests/unit/drift tests/unit/evaluation tests/integration/converter_pipeline -q -p no:cacheprovider
 ```
 
-## Alternative With The Exact Poetry Interpreter
+## Alternative With Poetry
 
 ### Schema only
 
 ```bash
-python -m pytest tests/unit/schema -q -p no:cacheprovider
+poetry run python -m pytest tests/unit/schema -q -p no:cacheprovider
 ```
 
 ### Profiling and schema together
 
 ```bash
-python -m pytest tests/unit/profiling tests/unit/schema -q -p no:cacheprovider
+poetry run python -m pytest tests/unit/profiling tests/unit/schema -q -p no:cacheprovider
 ```
 
 ### Mapping ir only
 
 ```bash
-python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider
+poetry run python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider
 ```
 
 ### Compiler, validation, and integration
 
 ```bash
-python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider
+poetry run python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider
 ```
 
 ### Drift and evaluation only
 
 ```bash
-python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider
+poetry run python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider
 ```
 
 ## Test Layout
