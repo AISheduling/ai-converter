@@ -179,3 +179,17 @@ def test_fingerprint_does_not_change_on_value_order_change() -> None:
     second_report = build_profile_report(LoadedInput(kind="json", path="second.json", records=second_records))
 
     assert first_report.schema_fingerprint == second_report.schema_fingerprint
+
+
+def test_fingerprint_does_not_change_on_duplicate_identical_records() -> None:
+    """Verify that duplicate identical rows do not change the fingerprint."""
+
+    base_records = [{"id": "1", "name": "alpha"}]
+    duplicated_records = base_records * 2
+
+    base_report = build_profile_report(LoadedInput(kind="json", path="base.json", records=base_records))
+    duplicated_report = build_profile_report(
+        LoadedInput(kind="json", path="duplicated.json", records=duplicated_records)
+    )
+
+    assert base_report.schema_fingerprint == duplicated_report.schema_fingerprint
