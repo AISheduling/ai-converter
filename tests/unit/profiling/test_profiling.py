@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from ai_converter.profiling.csv_profiler import profile_csv
 from ai_converter.profiling.json_profiler import profile_json
-from ai_converter.profiling.loaders import LoadedInput
+from ai_converter.profiling.loaders import LoadedInput, load_dataset
 from ai_converter.profiling.report_builder import build_profile_report
 from ai_converter.profiling.sampling import SamplingCandidate, select_representative_samples
 
@@ -56,6 +58,16 @@ def test_csv_profile_detects_columns_and_types() -> None:
     assert [entry.type_name for entry in fields["hours"].observed_types] == ["str"]
     assert fields["id"].candidate_id is True
     assert fields["role"].null_ratio > 0.0
+
+
+def test_csv_loader_rejects_normalized_header_collisions() -> None:
+    """Verify that normalized CSV header collisions fail before data loss."""
+
+    with pytest.raises(
+        ValueError,
+        match=r"task_id: 'Task ID', 'task_id'",
+    ):
+        load_dataset(FIXTURES / "collision_headers.csv")
 
 
 def test_json_profile_flattens_nested_paths() -> None:

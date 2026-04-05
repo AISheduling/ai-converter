@@ -5,6 +5,7 @@
 The flow is:
 
 1. `loaders.py` reads `CSV`, `JSON`, or `JSONL` and normalizes them into record dictionaries.
+   For `CSV`, normalized header names must be unique; if two source headers normalize to the same internal key, the loader raises `ValueError` before row loading instead of silently overwriting data.
 2. `csv_profiler.py` and `json_profiler.py` flatten each record into path-based observations such as `tasks[].id`.
 3. `report_builder.py` aggregates field/path statistics, computes representative samples, and builds the final `ProfileReport`.
 4. `fingerprint.py` hashes stable structural attributes so later tasks can detect format drift without depending on row ordering.

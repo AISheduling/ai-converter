@@ -89,10 +89,12 @@ def _load_csv(path: Path) -> LoadedDataset:
         if reader.fieldnames is None:
             raise ValueError("CSV source must contain a header row")
 
-        original_names: dict[str, set[str]] = {}
-        normalized_fieldnames = [normalize_name(name) for name in reader.fieldnames]
-        for original, normalized in zip(reader.fieldnames, normalized_fieldnames, strict=True):
-            original_names.setdefault(normalized, set()).add(original)
+        normalized_headers = _normalized_csv_headers(reader.fieldnames)
+        normalized_fieldnames = [normalized for normalized, _ in normalized_headers]
+        original_names = {
+            normalized: {original}
+            for normalized, original in normalized_headers
+        }
 
         records: list[dict[str, Any]] = []
         for row in reader:
@@ -110,6 +112,38 @@ def _load_csv(path: Path) -> LoadedDataset:
         original_names=original_names,
         normalized_field_aliases={name: name for name in normalized_fieldnames},
     )
+
+
+def _normalized_csv_headers(fieldnames: list[str]) -> list[tuple[str, str]]:
+    """Return normalized CSV header pairs, rejecting collisions up front.
+
+    Args:
+        fieldnames: Raw CSV header names as reported by ``csv.DictReader``.
+
+    Returns:
+        Ordered ``(normalized_name, original_name)`` pairs for each CSV column.
+
+    Raises:
+        ValueError: If two or more headers normalize to the same internal name.
+    """
+
+    normalized_headers = [(normalize_name(original), original) for original in fieldnames]
+    collisions: dict[str, list[str]] = {}
+    seen: dict[str, list[str]] = {}
+    for normalized, original in normalized_headers:
+        originals = seen.setdefault(normalized, [])
+        originals.append(original)
+        if len(originals) > 1:
+            collisions[normalized] = originals
+
+    if collisions:
+        details = "; ".join(
+            f"{normalized}: {', '.join(repr(name) for name in originals)}"
+            for normalized, originals in sorted(collisions.items())
+        )
+        raise ValueError(f"CSV headers must normalize to unique field names; collisions: {details}")
+
+    return normalized_headers
 
 
 def _load_json(path: Path) -> LoadedDataset:
