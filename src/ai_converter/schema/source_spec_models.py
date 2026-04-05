@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+SOURCE_SCHEMA_SPEC_VERSION = "1.0"
 
 
 class SourceFieldSpec(BaseModel):
@@ -23,10 +25,45 @@ class SourceFieldSpec(BaseModel):
 
 
 class SourceSchemaSpec(BaseModel):
-    """A deterministic schema-first view of the profiled L0 input."""
+    """A deterministic schema-first view of the profiled L0 input.
 
+    The serialized artifact contract is versioned at the top level so that
+    persisted schema payloads can evolve independently from prompt-template
+    versions or surrounding pipeline metadata.
+    """
+
+    version: str = SOURCE_SCHEMA_SPEC_VERSION
     source_name: str
     source_format: Literal["csv", "json", "jsonl"]
     root_type: Literal["rows", "object", "list"]
     schema_fingerprint: str | None = None
     fields: list[SourceFieldSpec] = Field(default_factory=list)
+
+    @field_validator("version")
+    @classmethod
+    def _strip_version(cls, value: str) -> str:
+        """Normalize the artifact version marker.
+
+        Args:
+            value: Raw version string from the payload.
+
+        Returns:
+            The stripped non-empty version string.
+
+        Raises:
+            ValueError: If the version is blank after normalization.
+        """
+
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("version must not be blank")
+        return normalized
+
+    def canonical_payload(self) -> dict[str, Any]:
+        """Return a stable JSON-compatible representation of the artifact.
+
+        Returns:
+            JSON-compatible payload for deterministic persistence and hashing.
+        """
+
+        return self.model_dump(mode="json")

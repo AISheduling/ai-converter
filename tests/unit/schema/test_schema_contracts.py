@@ -9,7 +9,11 @@ from pathlib import Path
 from ai_converter.profiling.report_builder import build_profile_report
 from ai_converter.schema.evidence_packer import pack_profile_evidence
 from ai_converter.schema.source_spec_aggregator import merge_source_schema_candidates
-from ai_converter.schema.source_spec_models import SourceFieldSpec, SourceSchemaSpec
+from ai_converter.schema.source_spec_models import (
+    SOURCE_SCHEMA_SPEC_VERSION,
+    SourceFieldSpec,
+    SourceSchemaSpec,
+)
 from ai_converter.schema.source_spec_normalizer import normalize_source_schema_spec
 from ai_converter.schema.target_card_builder import build_target_schema_card
 
@@ -93,6 +97,7 @@ def test_source_spec_aggregator_merges_aliases_and_confidence() -> None:
     """Verify that candidate aggregation merges aliases and confidence."""
 
     candidates = [SourceSchemaSpec.model_validate(item) for item in json.loads((SCHEMA_FIXTURES / "source_candidates.json").read_text(encoding="utf-8"))]
+    assert all(candidate.version == SOURCE_SCHEMA_SPEC_VERSION for candidate in candidates)
 
     merged = merge_source_schema_candidates(candidates)
 
@@ -102,6 +107,55 @@ def test_source_spec_aggregator_merges_aliases_and_confidence() -> None:
     assert field.aliases == ["task_name", "taskname"]
     assert field.examples == ["Execution", "Planning"]
     assert field.confidence == 0.8
+
+
+def test_source_schema_spec_parses_legacy_payload_without_version() -> None:
+    """Verify that legacy payloads still parse and materialize the current version."""
+
+    payload = {
+        "source_name": "legacy",
+        "source_format": "json",
+        "root_type": "list",
+        "schema_fingerprint": "legacy-fingerprint",
+        "fields": [
+            {
+                "path": "task_id",
+                "semantic_name": "task_id",
+                "dtype": "str",
+            }
+        ],
+    }
+
+    parsed = SourceSchemaSpec.model_validate(payload)
+
+    assert parsed.version == SOURCE_SCHEMA_SPEC_VERSION
+    assert parsed.canonical_payload()["version"] == SOURCE_SCHEMA_SPEC_VERSION
+
+
+def test_source_schema_spec_json_schema_exposes_version_field() -> None:
+    """Verify that the public JSON schema includes the explicit version marker."""
+
+    schema = SourceSchemaSpec.model_json_schema()
+
+    assert "version" in schema["properties"]
+    assert schema["properties"]["version"]["default"] == SOURCE_SCHEMA_SPEC_VERSION
+
+
+def test_source_schema_spec_canonical_payload_includes_explicit_version() -> None:
+    """Verify that the canonical payload exposes the artifact version marker."""
+
+    spec = SourceSchemaSpec(
+        source_name="candidate",
+        source_format="json",
+        root_type="list",
+        fields=[SourceFieldSpec(path="task_id", semantic_name="task_id", dtype="str")],
+    )
+
+    payload = spec.canonical_payload()
+
+    assert spec.version == SOURCE_SCHEMA_SPEC_VERSION
+    assert payload["version"] == SOURCE_SCHEMA_SPEC_VERSION
+    assert list(payload.keys())[:2] == ["version", "source_name"]
 
 
 def test_source_spec_normalizer_is_deterministic() -> None:
@@ -137,7 +191,7 @@ def test_source_spec_normalizer_is_deterministic() -> None:
         fields=list(reversed(first.fields)),
     )
 
-    assert normalize_source_schema_spec(first).model_dump() == normalize_source_schema_spec(second).model_dump()
+    assert normalize_source_schema_spec(first).canonical_payload() == normalize_source_schema_spec(second).canonical_payload()
 
 
 def _load_dsl_schema_module():
