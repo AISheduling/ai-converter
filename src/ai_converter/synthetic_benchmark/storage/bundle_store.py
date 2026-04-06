@@ -8,8 +8,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ai_converter.synthetic_benchmark.drift_generation import DriftSpec, apply_drift_to_payload
+from ai_converter.synthetic_benchmark.drift_generation.models import AppliedDriftManifest
 from ai_converter.synthetic_benchmark.renderers import render_l0_payload, render_l1_payload
 from ai_converter.synthetic_benchmark.scenario import CanonicalScenario, SampledScenario
+from ai_converter.synthetic_benchmark.storage.lineage import DriftLineage, build_drift_lineage
 from ai_converter.synthetic_benchmark.storage.models import DatasetBundle, DatasetBundleMetadata
 from ai_converter.synthetic_benchmark.templates import L0TemplateSpec
 
@@ -24,6 +27,8 @@ class BundleStoreExport:
     l0_path: Path
     l1_path: Path
     metadata_path: Path
+    drift_manifest_path: Path | None = None
+    lineage_path: Path | None = None
 
 
 class BundleStore:
@@ -66,6 +71,62 @@ class BundleStore:
                 config_hash=sampled.reproducibility.config_hash,
                 created_at=resolved_created_at,
                 source_template_id=sampled.scenario.source_template_id,
+                bundle_kind="base",
+            ),
+        )
+
+    def build_drift_bundle(
+        self,
+        base_bundle: DatasetBundle,
+        drift_spec: DriftSpec,
+        *,
+        bundle_id: str | None = None,
+        created_at: str | None = None,
+    ) -> DatasetBundle:
+        """Build one drift bundle from a previously constructed base bundle.
+
+        Args:
+            base_bundle: Base synthetic bundle to drift.
+            drift_spec: Drift spec to apply to the base `L0` payload.
+            bundle_id: Optional explicit drift bundle identifier.
+            created_at: Optional explicit timestamp for deterministic tests.
+
+        Returns:
+            Derived drift bundle with lineage and drift-manifest metadata.
+        """
+
+        resolved_bundle_id = bundle_id or f"{base_bundle.metadata.bundle_id}-{drift_spec.drift_id}"
+        resolved_created_at = created_at or datetime.now(UTC).isoformat()
+        records_key = (
+            base_bundle.template.records_key
+            if base_bundle.template.root_mode == "object"
+            else None
+        )
+        drifted_l0, drift_manifest = apply_drift_to_payload(
+            base_bundle.l0_payload,
+            drift_spec,
+            records_key=records_key,
+        )
+        lineage = build_drift_lineage(
+            parent_bundle_id=base_bundle.metadata.bundle_id,
+            drift_spec=drift_spec,
+        )
+        return DatasetBundle(
+            scenario=base_bundle.scenario,
+            template=base_bundle.template,
+            l0_payload=drifted_l0,
+            l1_payload=base_bundle.l1_payload,
+            drift_manifest=drift_manifest,
+            lineage=lineage,
+            metadata=DatasetBundleMetadata(
+                bundle_id=resolved_bundle_id,
+                dataset_id=base_bundle.metadata.dataset_id,
+                seed=base_bundle.metadata.seed,
+                generator_version=base_bundle.metadata.generator_version,
+                config_hash=base_bundle.metadata.config_hash,
+                created_at=resolved_created_at,
+                source_template_id=base_bundle.metadata.source_template_id,
+                bundle_kind="drift",
             ),
         )
 
@@ -87,12 +148,18 @@ class BundleStore:
         l0_path = root_dir / "l0.json"
         l1_path = root_dir / "l1.json"
         metadata_path = root_dir / "metadata.json"
+        drift_manifest_path = root_dir / "drift_manifest.json"
+        lineage_path = root_dir / "lineage.json"
 
         _write_json(scenario_path, bundle.scenario.canonical_payload())
         _write_json(template_path, bundle.template.canonical_payload())
         _write_json(l0_path, bundle.l0_payload)
         _write_json(l1_path, bundle.l1_payload)
         _write_json(metadata_path, bundle.metadata.canonical_payload())
+        if bundle.drift_manifest is not None:
+            _write_json(drift_manifest_path, bundle.drift_manifest.canonical_payload())
+        if bundle.lineage is not None:
+            _write_json(lineage_path, bundle.lineage.canonical_payload())
 
         return BundleStoreExport(
             root_dir=root_dir,
@@ -101,6 +168,8 @@ class BundleStore:
             l0_path=l0_path,
             l1_path=l1_path,
             metadata_path=metadata_path,
+            drift_manifest_path=drift_manifest_path if bundle.drift_manifest is not None else None,
+            lineage_path=lineage_path if bundle.lineage is not None else None,
         )
 
     def load(self, root_dir: str | Path) -> DatasetBundle:
@@ -119,6 +188,8 @@ class BundleStore:
             template=L0TemplateSpec.model_validate(_read_json(directory / "template.json")),
             l0_payload=_read_json(directory / "l0.json"),
             l1_payload=_read_json(directory / "l1.json"),
+            drift_manifest=_load_optional_manifest(directory / "drift_manifest.json"),
+            lineage=_load_optional_lineage(directory / "lineage.json"),
             metadata=DatasetBundleMetadata.model_validate(_read_json(directory / "metadata.json")),
         )
 
@@ -148,3 +219,34 @@ def _read_json(path: Path) -> Any:
     """
 
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _load_optional_manifest(path: Path) -> AppliedDriftManifest | None:
+    """Load an optional applied-drift manifest from disk.
+
+    Args:
+        path: Candidate drift-manifest file path.
+
+    Returns:
+        Parsed drift manifest or `None` when the file is absent.
+    """
+
+    if not path.exists():
+        return None
+
+    return AppliedDriftManifest.model_validate(_read_json(path))
+
+
+def _load_optional_lineage(path: Path) -> DriftLineage | None:
+    """Load optional drift lineage metadata from disk.
+
+    Args:
+        path: Candidate lineage file path.
+
+    Returns:
+        Parsed drift lineage or `None` when the file is absent.
+    """
+
+    if not path.exists():
+        return None
+    return DriftLineage.model_validate(_read_json(path))

@@ -78,6 +78,7 @@ Tests:
 Smoke integration tests:
 
 - `tests/integration/converter_pipeline/`
+- includes the from-scratch example smoke run through an injected fake OpenAI client
 
 Coverage notes:
 
@@ -114,10 +115,12 @@ python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider
 Fixtures:
 
 - `tests/fixtures/synthetic_benchmark/bundles/`
+- `tests/fixtures/synthetic_benchmark/drift/`
 
 Tests:
 
 - `tests/unit/synthetic_benchmark/`
+- includes heterogeneous rendering and synthetic drift coverage under `tests/unit/synthetic_benchmark/drift/`
 
 Command:
 
@@ -173,6 +176,7 @@ poetry run python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cach
 - `tests/fixtures/` contains deterministic input data used by tests
 - `tests/fixtures/drift/` contains synthetic baseline and drifted source payloads for drift and evaluation tests
 - `tests/fixtures/synthetic_benchmark/bundles/` contains repo-local fixture roots for persisted synthetic bundles
+- `tests/fixtures/synthetic_benchmark/drift/` contains deterministic drift specs and lineage-oriented synthetic drift fixtures
 
 ## Notes
 

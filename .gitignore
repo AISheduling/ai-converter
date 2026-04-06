@@ -49,6 +49,7 @@ coverage.xml
 *.py.cover
 .hypothesis/
 .pytest_cache/
+.pytest-local-tmp/
 cover/
 
 # Translations
@@ -212,3 +213,5 @@ __marimo__/
 .codex
 .idea
 .ai
+examples/from_scratch_pipeline/generated/*
+!examples/from_scratch_pipeline/generated/.gitkeep

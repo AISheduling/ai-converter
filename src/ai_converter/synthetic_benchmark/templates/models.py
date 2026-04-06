@@ -6,21 +6,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .common import OptionalTaskField, TaskFieldAliases
+from .shape_variants import ShapeVariantPolicy
+
 L0_TEMPLATE_SPEC_VERSION = "1.0"
-OptionalTaskField = Literal["assignee", "tags"]
-
-
-class TaskFieldAliases(BaseModel):
-    """Configurable alias surface for deterministic task-record rendering."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    entity_id: str = "task_id"
-    name: str = "task_name"
-    status: str = "status_text"
-    duration_days: str = "duration_days"
-    assignee: str = "assignee"
-    tags: str = "tags"
 
 
 class L0TemplateSpec(BaseModel):
@@ -39,6 +28,7 @@ class L0TemplateSpec(BaseModel):
         default_factory=lambda: ["assignee", "tags"]
     )
     extra_fields: dict[str, Any] = Field(default_factory=dict)
+    shape_variant_policy: ShapeVariantPolicy | None = None
 
     def canonical_payload(self) -> dict[str, Any]:
         """Return a stable JSON-compatible template payload.

@@ -49,6 +49,24 @@ print(report.schema_fingerprint)
 
 If you want the broader verification matrix, use [tests/README.md](tests/README.md).
 
+## From-Scratch Example
+
+If you want one walkthrough that starts from several JSON inputs and one target `Pydantic` model, see [examples/from_scratch_pipeline/README.md](examples/from_scratch_pipeline/README.md).
+
+The example shows how to:
+
+- combine several source JSON examples into one deterministic profiling baseline
+- configure OpenAI-compatible `base_url`, `api_token`, and `model` constants inside the example
+- synthesize `SourceSchemaSpec` and `MappingIR`, compile a converter, validate converted output, classify compatible source drift, and apply a local compatible patch
+
+Run it from the repository root with:
+
+```bash
+python examples/from_scratch_pipeline/run_example.py
+```
+
+The repository test suite runs the same path offline through an injected fake OpenAI client, so the example stays verifiable without live credentials.
+
 ## Use The Profiling API
 
 The profiling layer lives in `src/ai_converter/profiling/` and exposes a simple entry point through `ai_converter.profiling`.
@@ -403,7 +421,9 @@ It helps you:
 
 - sample canonical task scenarios reproducibly from a seed
 - render the same scenario into a gold `L1` payload and a configurable `L0` payload
-- persist repo-local synthetic bundles for later drift and benchmark tasks
+- apply deterministic shape-variant policies so same-type records can render with different source-side field sets
+- apply versioned synthetic drift specs to `L0` payloads without changing the canonical scenario
+- persist repo-local base and drift bundles with lineage metadata for later drift and benchmark tasks
 
 ### Example: sample, render, and persist one bundle
 
@@ -436,6 +456,57 @@ print(paths.l0_path)
 print(paths.l1_path)
 ```
 
+### Example: derive one drift bundle from a base bundle
+
+```python
+from pathlib import Path
+
+from ai_converter.synthetic_benchmark import (
+    AddFieldOperator,
+    BundleStore,
+    DriftSpec,
+    L0TemplateSpec,
+    RenameFieldOperator,
+    sample_canonical_scenario,
+)
+
+store = BundleStore()
+base_bundle = store.build_bundle(
+    sample_canonical_scenario(7),
+    L0TemplateSpec(),
+    dataset_id="synthetic-demo",
+    bundle_id="bundle-1",
+    created_at="2026-04-06T00:00:00+00:00",
+)
+drift_bundle = store.build_drift_bundle(
+    base_bundle,
+    DriftSpec(
+        drift_id="rename-plus-additive",
+        drift_type="mixed",
+        severity="low",
+        compatibility_class="rename_compatible",
+        operators=[
+            RenameFieldOperator(
+                record_indexes=[0],
+                path="task_name",
+                new_path="taskName",
+            ),
+            AddFieldOperator(
+                record_indexes=[0],
+                path="task_priority",
+                value="P2",
+            ),
+        ],
+    ),
+    bundle_id="bundle-1-drift",
+    created_at="2026-04-06T00:00:00+00:00",
+)
+paths = store.save(drift_bundle, Path("synthetic_bundle_drift"))
+
+print(paths.drift_manifest_path)
+print(paths.lineage_path)
+```
+
 ## Package Layout
 
 - `src/ai_converter/profiling/` contains the deterministic profiling layer
@@ -446,7 +517,7 @@ print(paths.l1_path)
 - `src/ai_converter/validation/` contains structural, semantic, acceptance, and repair-loop validation
 - `src/ai_converter/drift/` contains drift classification, deterministic heuristics, and local patch application
 - `src/ai_converter/evaluation/` contains benchmark metrics, orchestration, and reporting
-- `src/ai_converter/synthetic_benchmark/` contains deterministic synthetic scenario sampling, renderers, and bundle storage
+- `src/ai_converter/synthetic_benchmark/` contains deterministic synthetic scenario sampling, shape variants, drift generation, and lineage-aware bundle storage
 - `prompts/` contains versioned prompt template files
 - `docs/architecture/profiling.md` documents the profiling design
 - `docs/architecture/schema_contracts.md` documents the schema contract layer
@@ -454,6 +525,7 @@ print(paths.l1_path)
 - `docs/architecture/compiler_and_validation.md` documents the execution and validation design
 - `docs/evaluation/benchmark_protocol.md` documents the benchmark and evaluation workflow
 - `docs/synthetic_benchmark/architecture.md` documents the synthetic benchmark foundation
+- `docs/synthetic_benchmark/drift.md` documents synthetic drift generation and lineage
 - `examples/benchmark_config.json` shows an illustrative benchmark layout
 
 ## Project Notes

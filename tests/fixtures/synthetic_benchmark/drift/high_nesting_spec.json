@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "drift_id": "nest-status",
+  "drift_type": "nesting",
+  "severity": "high",
+  "compatibility_class": "breaking_change",
+  "operators": [
+    {
+      "kind": "nest_field",
+      "path": "status_text",
+      "new_path": "status.details",
+      "record_indexes": [0, 1, 2]
+    }
+  ],
+  "notes": ["Move status into a nested object to force a structure-changing drift."]
+}

@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "drift_id": "add-priority",
+  "drift_type": "additive",
+  "severity": "low",
+  "compatibility_class": "additive_compatible",
+  "operators": [
+    {
+      "kind": "add_field",
+      "path": "task_priority",
+      "value": "P1",
+      "record_indexes": [0, 1]
+    }
+  ],
+  "notes": ["Add a compatible synthetic priority field to the first two records."]
+}

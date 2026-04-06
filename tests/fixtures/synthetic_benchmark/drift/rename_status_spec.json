@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "drift_id": "rename-status",
+  "drift_type": "rename",
+  "severity": "low",
+  "compatibility_class": "rename_compatible",
+  "operators": [
+    {
+      "kind": "rename_field",
+      "path": "status_text",
+      "new_path": "status_text_label",
+      "record_indexes": [0, 1, 2]
+    }
+  ],
+  "notes": ["Rename the status field to a compatible source-side surface."]
+}
