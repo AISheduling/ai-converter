@@ -1,6 +1,75 @@
 {
+  "labels": [
+    "adapter",
+    "implementation"
+  ],
+  "metadata": {
+    "priority": 2,
+    "tags": [
+      "backend",
+      "integration"
+    ],
+    "watchers": [
+      {
+        "channels": [
+          "slack"
+        ],
+        "name": "platform"
+      }
+    ]
+  },
+  "milestones": [
+    {
+      "name": "coding",
+      "owners": [
+        {
+          "name": "bob",
+          "role": "lead"
+        }
+      ]
+    },
+    {
+      "name": "tests",
+      "owners": [
+        {
+          "name": "nina",
+          "role": "qa"
+        },
+        {
+          "name": "oleg",
+          "role": "reviewer"
+        }
+      ]
+    }
+  ],
   "owner": "bob",
   "status": "in_progress",
+  "subtasks": [
+    {
+      "id": "TASK-101-1",
+      "kind": "api",
+      "notes": [
+        {
+          "author": "bob",
+          "text": "Implement adapter wiring"
+        }
+      ]
+    },
+    {
+      "id": "TASK-101-2",
+      "kind": "tests",
+      "notes": [
+        {
+          "author": "nina",
+          "text": "Cover fake client path"
+        },
+        {
+          "author": "oleg",
+          "text": "Keep it offline"
+        }
+      ]
+    }
+  ],
   "taskName": "Build adapter",
   "task_id": "TASK-101"
 }

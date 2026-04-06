@@ -1,6 +1,57 @@
 {
+  "labels": [
+    "docs",
+    "release"
+  ],
+  "metadata": {
+    "priority": 1,
+    "tags": [
+      "handoff",
+      "guide"
+    ],
+    "watchers": [
+      {
+        "channels": [
+          "email",
+          "slack"
+        ],
+        "name": "docs-team"
+      }
+    ]
+  },
+  "milestones": [
+    {
+      "name": "draft",
+      "owners": [
+        {
+          "name": "dana",
+          "role": "lead"
+        },
+        {
+          "name": "ivan",
+          "role": "reviewer"
+        }
+      ]
+    }
+  ],
   "owner": "dana",
   "status": "ready",
+  "subtasks": [
+    {
+      "id": "TASK-200-1",
+      "kind": "docs",
+      "notes": [
+        {
+          "author": "dana",
+          "text": "Draft the final walkthrough"
+        },
+        {
+          "author": "ivan",
+          "text": "Review the nested examples"
+        }
+      ]
+    }
+  ],
   "task_id": "TASK-200",
   "task_name": "Ship example docs"
 }

@@ -1,6 +1,76 @@
 {
+  "labels": [
+    "release",
+    "planning"
+  ],
+  "metadata": {
+    "priority": 1,
+    "tags": [
+      "schedule",
+      "alpha"
+    ],
+    "watchers": [
+      {
+        "channels": [
+          "email",
+          "slack"
+        ],
+        "name": "ops"
+      }
+    ]
+  },
+  "milestones": [
+    {
+      "name": "draft",
+      "owners": [
+        {
+          "name": "alice",
+          "role": "lead"
+        },
+        {
+          "name": "mira",
+          "role": "qa"
+        }
+      ]
+    },
+    {
+      "name": "approval",
+      "owners": [
+        {
+          "name": "bob",
+          "role": "reviewer"
+        }
+      ]
+    }
+  ],
   "owner": "alice",
   "status": "ready",
+  "subtasks": [
+    {
+      "id": "TASK-100-1",
+      "kind": "draft",
+      "notes": [
+        {
+          "author": "alice",
+          "text": "Collect requirements"
+        },
+        {
+          "author": "mira",
+          "text": "Review launch checklist"
+        }
+      ]
+    },
+    {
+      "id": "TASK-100-2",
+      "kind": "review",
+      "notes": [
+        {
+          "author": "bob",
+          "text": "Confirm dependencies"
+        }
+      ]
+    }
+  ],
   "taskName": "Plan release",
   "task_id": "TASK-100"
 }

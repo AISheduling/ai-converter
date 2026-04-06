@@ -5,6 +5,7 @@ This example shows the full `ai-converter` path starting from several small JSON
 It demonstrates:
 
 - how several source JSON files become one deterministic profiling baseline
+- how those source examples can include nested arrays and objects inside arrays without changing the core walkthrough
 - how a target `Pydantic` model becomes a `TargetSchemaCard`
 - how the current LLM-backed synthesis layer produces a `SourceSchemaSpec` and `MappingIR`
 - how that `MappingIR` becomes a compiled `ConverterPackage`
@@ -17,6 +18,14 @@ It demonstrates:
 - `source_samples/*.json`: baseline source examples used to build the converter
 - `convert_record.json`: fresh record converted by the compiled package
 - `drift_samples/*.json`: candidate source data used for drift detection
+
+The shipped JSON examples intentionally contain richer source structure, including:
+
+- top-level arrays such as `labels`
+- arrays of objects such as `subtasks` and `milestones`
+- nested arrays inside those objects such as `subtasks[].notes` and `milestones[].owners`
+
+The walkthrough still maps only the core flat fields into the target payload so the end-to-end flow stays easy to follow.
 
 ## Configure The Example
 

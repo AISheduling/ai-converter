@@ -106,6 +106,12 @@ def test_from_scratch_pipeline_example_runs_offline() -> None:
         shutil.rmtree(output_dir)
 
     summary = module.run_example(output_dir=output_dir, client=_FakeOpenAIClient())
+    baseline_sample = json.loads(
+        (ROOT / "examples" / "from_scratch_pipeline" / "source_samples" / "sample_01.json").read_text(encoding="utf-8")
+    )
+    drift_sample = json.loads(
+        (ROOT / "examples" / "from_scratch_pipeline" / "drift_samples" / "rename_candidate_01.json").read_text(encoding="utf-8")
+    )
 
     assert summary["mapping_candidate_count"] == 1
     assert summary["mapping_validation"]["valid"] is True
@@ -120,6 +126,12 @@ def test_from_scratch_pipeline_example_runs_offline() -> None:
     assert Path(summary["drift_report_path"]).exists()
     assert Path(summary["patched_source_schema_path"]).exists()
     assert Path(summary["patched_mapping_ir_path"]).exists()
+    assert isinstance(baseline_sample["subtasks"], list)
+    assert isinstance(baseline_sample["subtasks"][0], dict)
+    assert isinstance(baseline_sample["subtasks"][0]["notes"], list)
+    assert isinstance(baseline_sample["milestones"], list)
+    assert isinstance(baseline_sample["milestones"][0]["owners"], list)
+    assert isinstance(drift_sample["subtasks"][0]["notes"][0], dict)
 
     converted_payload = json.loads(Path(summary["converted_payload_path"]).read_text(encoding="utf-8"))
     drift_report = json.loads(Path(summary["drift_report_path"]).read_text(encoding="utf-8"))

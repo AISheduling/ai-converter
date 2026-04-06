@@ -1,6 +1,65 @@
 {
+  "labels": [
+    "review",
+    "docs"
+  ],
+  "metadata": {
+    "priority": 3,
+    "tags": [
+      "qa",
+      "handoff"
+    ],
+    "watchers": [
+      {
+        "channels": [
+          "email"
+        ],
+        "name": "documentation"
+      },
+      {
+        "channels": [
+          "slack",
+          "pager"
+        ],
+        "name": "support"
+      }
+    ]
+  },
+  "milestones": [
+    {
+      "name": "walkthrough",
+      "owners": [
+        {
+          "name": "carol",
+          "role": "lead"
+        }
+      ]
+    }
+  ],
   "owner": "carol",
   "status": "done",
+  "subtasks": [
+    {
+      "id": "TASK-102-1",
+      "kind": "review",
+      "notes": [
+        {
+          "author": "carol",
+          "text": "Verify generated artifacts"
+        }
+      ]
+    },
+    {
+      "id": "TASK-102-2",
+      "kind": "handoff",
+      "notes": [
+        {
+          "author": "support",
+          "text": "Archive the final checklist"
+        }
+      ]
+    }
+  ],
   "task_id": "TASK-102",
   "task_name": "Review pipeline"
 }
