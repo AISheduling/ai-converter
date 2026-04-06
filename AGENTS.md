@@ -30,7 +30,7 @@ Installed workflow agents:
 
 ## Profiling Notes
 
-- Profiling code lives under `src/llm_converter/profiling/`.
+- Profiling code lives under `src/ai_converter/profiling/`.
 - Profiling fixtures live under `tests/fixtures/profiling/`.
 - Focused profiling tests live under `tests/unit/profiling/`.
 - Preferred profiling verification command is `python -m pytest tests/unit/profiling -q -p no:cacheprovider`.
@@ -61,8 +61,8 @@ Installed workflow agents:
 
 ## Drift And Evaluation Notes
 
-- Drift detection code lives under `src/llm_converter/drift/`.
-- Benchmark and reporting code lives under `src/llm_converter/evaluation/`.
+- Drift detection code lives under `src/ai_converter/drift/`.
+- Benchmark and reporting code lives under `src/ai_converter/evaluation/`.
 - Drift fixtures live under `tests/fixtures/drift/`.
 - Focused drift and evaluation tests live under `tests/unit/drift/` and `tests/unit/evaluation/`.
 - Benchmark protocol docs live under `docs/evaluation/benchmark_protocol.md`.
@@ -72,19 +72,19 @@ Installed workflow agents:
 
 ## Project Notes
 
-- The profiling layer lives under `src/llm_converter/profiling/`.
+- The profiling layer lives under `src/ai_converter/profiling/`.
 - Keep `dsl-core/` read-only for now; it is treated as an external reference library and example corpus.
 - Focused profiling fixtures live in `tests/fixtures/profiling/`.
 - Focused profiling tests run with `pytest tests/unit/profiling -q`.
-- Schema contracts live under `src/llm_converter/schema/`.
+- Schema contracts live under `src/ai_converter/schema/`.
 - Schema fixtures live under `tests/fixtures/schema/`.
 - Focused schema tests run with `python -m pytest tests/unit/schema -q -p no:cacheprovider`.
-- The offline LLM adapter layer and MappingIR contracts live under `src/llm_converter/llm/` and `src/llm_converter/mapping_ir/`.
+- The offline LLM adapter layer and MappingIR contracts live under `src/ai_converter/llm/` and `src/ai_converter/mapping_ir/`.
 - Prompt templates for the mapping pipeline live under `prompts/`.
 - Focused mapping-ir tests run with `python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider`.
-- Deterministic execution and acceptance validation live under `src/llm_converter/compiler/` and `src/llm_converter/validation/`.
+- Deterministic execution and acceptance validation live under `src/ai_converter/compiler/` and `src/ai_converter/validation/`.
 - Focused compiler/validation tests run with `python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider`.
-- Deterministic drift detection and benchmark evaluation live under `src/llm_converter/drift/` and `src/llm_converter/evaluation/`.
+- Deterministic drift detection and benchmark evaluation live under `src/ai_converter/drift/` and `src/ai_converter/evaluation/`.
 - Focused drift/evaluation tests run with `python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider`.
 - Benchmark examples live under `examples/`, and benchmark protocol docs live under `docs/evaluation/`.
 - `tests/integration/converter_pipeline/` may reuse deterministic profiling fixtures or local inline models, but must stay offline and must not modify `dsl-core/`.

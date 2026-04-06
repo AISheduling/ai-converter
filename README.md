@@ -51,7 +51,7 @@ If you want the broader verification matrix, use [tests/README.md](tests/README.
 
 ## Use The Profiling API
 
-The profiling layer lives in `src/llm_converter/profiling/` and exposes a simple entry point through `llm_converter.profiling`.
+The profiling layer lives in `src/ai_converter/profiling/` and exposes a simple entry point through `ai_converter.profiling`.
 
 ```python
 from ai_converter.profiling import build_profile_report
@@ -291,7 +291,7 @@ failed attempt, its failure bundle, and the patch or stop outcome deterministica
 
 ## Use The Drift And Evaluation APIs
 
-Deterministic drift handling lives under `src/llm_converter/drift/` and reproducible benchmark helpers under `src/llm_converter/evaluation/`.
+Deterministic drift handling lives under `src/ai_converter/drift/` and reproducible benchmark helpers under `src/ai_converter/evaluation/`.
 
 It helps you:
 
@@ -396,14 +396,14 @@ artifacts. If you need timing diagnostics, call
 
 ## Package Layout
 
-- `src/llm_converter/profiling/` contains the deterministic profiling layer
-- `src/llm_converter/schema/` contains schema contracts and evidence packing
-- `src/llm_converter/llm/` contains prompt rendering and adapter contracts
-- `src/llm_converter/mapping_ir/` contains MappingIR models, validation, ranking, and repair helpers
-- `src/llm_converter/compiler/` contains deterministic code generation and module loading
-- `src/llm_converter/validation/` contains structural, semantic, acceptance, and repair-loop validation
-- `src/llm_converter/drift/` contains drift classification, deterministic heuristics, and local patch application
-- `src/llm_converter/evaluation/` contains benchmark metrics, orchestration, and reporting
+- `src/ai_converter/profiling/` contains the deterministic profiling layer
+- `src/ai_converter/schema/` contains schema contracts and evidence packing
+- `src/ai_converter/llm/` contains prompt rendering and adapter contracts
+- `src/ai_converter/mapping_ir/` contains MappingIR models, validation, ranking, and repair helpers
+- `src/ai_converter/compiler/` contains deterministic code generation and module loading
+- `src/ai_converter/validation/` contains structural, semantic, acceptance, and repair-loop validation
+- `src/ai_converter/drift/` contains drift classification, deterministic heuristics, and local patch application
+- `src/ai_converter/evaluation/` contains benchmark metrics, orchestration, and reporting
 - `prompts/` contains versioned prompt template files
 - `docs/architecture/profiling.md` documents the profiling design
 - `docs/architecture/schema_contracts.md` documents the schema contract layer

@@ -4,13 +4,13 @@ The compiler and validation layer turns a validated `MappingIR` program into a v
 
 ## Flow
 
-1. `src/llm_converter/mapping_ir/validator.py` checks that a candidate program is structurally safe to execute.
-2. `src/llm_converter/compiler/compiler.py` normalizes step order, emits deterministic Python source, loads an importable module, and wraps it in a versioned `ConverterPackage`.
-3. `src/llm_converter/compiler/runtime_ops.py` provides the pure helpers used by generated modules.
-4. `src/llm_converter/validation/structural.py` validates converter output against a target `Pydantic` model.
-5. `src/llm_converter/validation/semantic.py` applies deterministic semantic assertions on top of the structural result.
-6. `src/llm_converter/validation/acceptance.py` runs dataset-level acceptance and computes unified status fields.
-7. `src/llm_converter/validation/repair_loop.py` provides the bounded offline repair orchestration used by tests and future adapters.
+1. `src/ai_converter/mapping_ir/validator.py` checks that a candidate program is structurally safe to execute.
+2. `src/ai_converter/compiler/compiler.py` normalizes step order, emits deterministic Python source, loads an importable module, and wraps it in a versioned `ConverterPackage`.
+3. `src/ai_converter/compiler/runtime_ops.py` provides the pure helpers used by generated modules.
+4. `src/ai_converter/validation/structural.py` validates converter output against a target `Pydantic` model.
+5. `src/ai_converter/validation/semantic.py` applies deterministic semantic assertions on top of the structural result.
+6. `src/ai_converter/validation/acceptance.py` runs dataset-level acceptance and computes unified status fields.
+7. `src/ai_converter/validation/repair_loop.py` provides the bounded offline repair orchestration used by tests and future adapters.
 
 ## Compiler Design
 

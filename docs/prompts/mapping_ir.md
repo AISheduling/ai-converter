@@ -15,7 +15,7 @@ The `v1-*.txt` naming convention keeps templates versioned without coupling the 
 
 ## Renderers
 
-The renderers live in `src/llm_converter/llm/prompt_renderers.py` and build:
+The renderers live in `src/ai_converter/llm/prompt_renderers.py` and build:
 
 - a source-schema synthesis prompt from `ProfileReport`
 - a mapping synthesis prompt from `SourceSchemaSpec + TargetSchemaCard`
@@ -71,7 +71,7 @@ print(prompt.user_prompt[:120])
 
 ## Offline testing
 
-The fake adapter in `src/llm_converter/llm/fake_client.py` consumes queued `FakeLLMReply` objects and validates structured outputs locally against Pydantic models.
+The fake adapter in `src/ai_converter/llm/fake_client.py` consumes queued `FakeLLMReply` objects and validates structured outputs locally against Pydantic models.
 
 This lets `tests/unit/mapping_ir/` cover:
 
