@@ -24,6 +24,32 @@ class CaseAccuracyMetrics(BaseModel):
     field_accuracy: float = Field(ge=0.0, le=1.0)
 
 
+class BenchmarkStageArtifacts(BaseModel):
+    """Optional stage-wise signals attached to aggregate benchmark metrics.
+
+    Attributes:
+        build_success: Whether subject preparation completed successfully.
+        execution_success_rate: Fraction of benchmark cases that executed.
+        runtime_validity_rate: Fraction of cases that passed the end-to-end runtime path.
+        structural_validity_rate: Fraction of cases that passed structural validation.
+        semantic_validity_rate: Fraction of cases that passed semantic validation.
+        source_structure_recovery: Optional upstream source-structure score.
+        mapping_quality: Optional upstream mapping-quality score.
+        artifacts: Optional JSON-compatible stage artifacts supplied by the caller.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    build_success: bool | None = None
+    execution_success_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    runtime_validity_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    structural_validity_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    semantic_validity_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    source_structure_recovery: float | None = Field(default=None, ge=0.0, le=1.0)
+    mapping_quality: float | None = Field(default=None, ge=0.0, le=1.0)
+    artifacts: dict[str, Any] = Field(default_factory=dict)
+
+
 class BenchmarkMetrics(BaseModel):
     """Aggregate benchmark metrics for one subject/scenario run."""
 
@@ -37,6 +63,7 @@ class BenchmarkMetrics(BaseModel):
     repair_iterations: int = Field(ge=0)
     preparation_seconds: float = Field(ge=0.0, exclude=True)
     runtime_seconds: float = Field(ge=0.0, exclude=True)
+    stage_metrics: BenchmarkStageArtifacts | None = None
 
 
 def compute_case_accuracy(
@@ -121,6 +148,66 @@ def compute_macro_micro_accuracy(
     return macro, micro
 
 
+def build_stage_metrics(
+    case_results: Sequence[Any],
+    *,
+    prepare_succeeded: bool,
+    stage_artifacts: BenchmarkStageArtifacts | None = None,
+    acceptance_report: AcceptanceReport | None = None,
+) -> BenchmarkStageArtifacts:
+    """Build optional stage-wise metrics from benchmark execution details.
+
+    Args:
+        case_results: Benchmark case-result objects.
+        prepare_succeeded: Whether subject preparation completed successfully.
+        stage_artifacts: Optional caller-supplied stage metrics or artifacts.
+        acceptance_report: Optional acceptance report reused by the harness.
+
+    Returns:
+        Stage-wise metrics derived from the current benchmark execution.
+    """
+
+    total_cases = len(case_results)
+    execution_success_rate = (
+        0.0
+        if total_cases == 0
+        else sum(bool(getattr(case, "execution_success", False)) for case in case_results) / total_cases
+    )
+    structural_validity_values = [
+        bool(case.structural_validity)
+        for case in case_results
+        if getattr(case, "structural_validity", None) is not None
+    ]
+    semantic_validity_values = [
+        bool(case.semantic_validity)
+        for case in case_results
+        if getattr(case, "semantic_validity", None) is not None
+    ]
+
+    payload: dict[str, Any] = {
+        "build_success": prepare_succeeded,
+        "execution_success_rate": execution_success_rate,
+        "runtime_validity_rate": (
+            acceptance_report.coverage
+            if acceptance_report is not None
+            else execution_success_rate
+        ),
+        "structural_validity_rate": _mean_boolean(structural_validity_values),
+        "semantic_validity_rate": _mean_boolean(semantic_validity_values),
+        "source_structure_recovery": None,
+        "mapping_quality": None,
+        "artifacts": {},
+    }
+    if stage_artifacts is not None:
+        for field_name, value in stage_artifacts.model_dump(mode="python").items():
+            if value is None:
+                continue
+            if field_name == "artifacts" and value == {}:
+                continue
+            payload[field_name] = value
+    return BenchmarkStageArtifacts(**payload)
+
+
 def build_benchmark_metrics(
     case_metrics: Sequence[CaseAccuracyMetrics],
     *,
@@ -128,6 +215,7 @@ def build_benchmark_metrics(
     runtime_seconds: float,
     execution_success: bool,
     acceptance_report: AcceptanceReport | None = None,
+    stage_metrics: BenchmarkStageArtifacts | None = None,
 ) -> BenchmarkMetrics:
     """Build aggregate benchmark metrics for one benchmark run.
 
@@ -137,6 +225,7 @@ def build_benchmark_metrics(
         runtime_seconds: Total time spent executing the benchmark cases.
         execution_success: Whether all benchmark cases executed successfully.
         acceptance_report: Optional acceptance report reused from the validation layer.
+        stage_metrics: Optional stage-wise metrics for the same run.
 
     Returns:
         Aggregate benchmark metrics.
@@ -170,7 +259,23 @@ def build_benchmark_metrics(
         repair_iterations=repair_iterations,
         preparation_seconds=preparation_seconds,
         runtime_seconds=runtime_seconds,
+        stage_metrics=stage_metrics,
     )
+
+
+def _mean_boolean(values: Sequence[bool]) -> float | None:
+    """Return the rate of `True` values for a boolean sequence.
+
+    Args:
+        values: Boolean values to summarize.
+
+    Returns:
+        Fraction of `True` values, or `None` when the sequence is empty.
+    """
+
+    if not values:
+        return None
+    return sum(values) / len(values)
 
 
 def _flatten_mapping(mapping: dict[str, Any], prefix: str = "") -> dict[str, Any]:

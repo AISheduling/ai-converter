@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .benchmark import BenchmarkRunResult
+from .benchmark import BenchmarkExperimentResult, BenchmarkRunResult
 
 _TIMING_FIELD_NAMES = frozenset({"preparation_seconds", "runtime_seconds"})
 
@@ -131,6 +131,42 @@ def render_benchmark_markdown(result: BenchmarkRunResult) -> str:
     return "\n".join(lines)
 
 
+def render_benchmark_experiment_markdown(
+    result: BenchmarkExperimentResult,
+    run_manifest: list[dict[str, Any]],
+) -> str:
+    """Render a Markdown summary for one repeated benchmark experiment.
+
+    Args:
+        result: Experiment result to summarize.
+        run_manifest: Deterministic run-manifest payload built during export.
+
+    Returns:
+        Human-readable Markdown summary for the experiment layout.
+    """
+
+    lines = ["# Benchmark Experiment Summary", ""]
+    lines.append(f"Experiment: {result.experiment_name or 'unnamed'}")
+    lines.append(f"Run count: {len(result.runs)}")
+    lines.append("")
+    lines.append("| Run ID | Scenarios | Tags | JSON | CSV | Markdown | Telemetry |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+    for run_entry in run_manifest:
+        artifacts = run_entry["artifacts"]
+        lines.append(
+            "| "
+            f"{run_entry['run_id']} | "
+            f"{', '.join(run_entry['scenario_names'])} | "
+            f"{', '.join(run_entry['scenario_tags']) or '-'} | "
+            f"{artifacts['json']} | "
+            f"{artifacts['csv']} | "
+            f"{artifacts['markdown']} | "
+            f"{artifacts.get('telemetry', '-')} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def write_benchmark_markdown(result: BenchmarkRunResult, path: str | Path) -> Path:
     """Write one benchmark result bundle as Markdown.
 
@@ -184,6 +220,70 @@ def export_benchmark_reports(
     return paths
 
 
+def export_benchmark_experiment_reports(
+    result: BenchmarkExperimentResult,
+    output_dir: str | Path,
+    *,
+    stem: str = "benchmark",
+    include_telemetry: bool = False,
+) -> dict[str, Path]:
+    """Write repeated benchmark runs into a deterministic grouped layout.
+
+    Args:
+        result: Repeated benchmark experiment result to export.
+        output_dir: Directory where grouped artifacts should be written.
+        stem: Shared filename prefix for per-run artifacts.
+        include_telemetry: When ``True``, also emit per-run telemetry sidecars.
+
+    Returns:
+        Mapping from artifact type to output path.
+    """
+
+    directory = Path(output_dir)
+    runs_dir = directory / "runs"
+    directory.mkdir(parents=True, exist_ok=True)
+    runs_dir.mkdir(parents=True, exist_ok=True)
+
+    run_manifest: list[dict[str, Any]] = []
+    for run in result.runs:
+        run_dir = runs_dir / run.run_id
+        artifact_paths = export_benchmark_reports(
+            run.result,
+            run_dir,
+            stem=stem,
+            include_telemetry=include_telemetry,
+        )
+        run_manifest.append(
+            _build_experiment_run_manifest(
+                run_id=run.run_id,
+                artifact_paths=artifact_paths,
+                output_dir=directory,
+                run_result=run.result,
+            )
+        )
+
+    payload = _build_benchmark_experiment_payload(
+        result=result,
+        run_manifest=run_manifest,
+        include_telemetry=include_telemetry,
+    )
+    experiment_json_path = directory / f"{stem}.experiment.json"
+    experiment_markdown_path = directory / f"{stem}.experiment.md"
+    experiment_json_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    experiment_markdown_path.write_text(
+        render_benchmark_experiment_markdown(result, run_manifest),
+        encoding="utf-8",
+    )
+    return {
+        "experiment_json": experiment_json_path,
+        "experiment_markdown": experiment_markdown_path,
+        "runs_dir": runs_dir,
+    }
+
+
 def _build_canonical_benchmark_payload(result: BenchmarkRunResult) -> dict[str, Any]:
     """Build the canonical machine-readable benchmark payload."""
 
@@ -216,6 +316,71 @@ def _build_benchmark_telemetry_payload(result: BenchmarkRunResult) -> dict[str, 
             }
             for scenario_result in result.scenario_results
         ]
+    }
+
+
+def _build_benchmark_experiment_payload(
+    *,
+    result: BenchmarkExperimentResult,
+    run_manifest: list[dict[str, Any]],
+    include_telemetry: bool,
+) -> dict[str, Any]:
+    """Build a deterministic grouped-run manifest payload.
+
+    Args:
+        result: Repeated benchmark experiment result.
+        run_manifest: Deterministic manifest entries for every exported run.
+        include_telemetry: Whether per-run telemetry sidecars were exported.
+
+    Returns:
+        Machine-readable grouped-run manifest.
+    """
+
+    return {
+        "experiment_name": result.experiment_name,
+        "run_count": len(result.runs),
+        "include_telemetry": include_telemetry,
+        "runs": run_manifest,
+    }
+
+
+def _build_experiment_run_manifest(
+    *,
+    run_id: str,
+    artifact_paths: dict[str, Path],
+    output_dir: Path,
+    run_result: BenchmarkRunResult,
+) -> dict[str, Any]:
+    """Build one experiment-manifest entry for an exported run.
+
+    Args:
+        run_id: Deterministic run identifier.
+        artifact_paths: Exported per-run artifact paths.
+        output_dir: Experiment root used for relative paths.
+        run_result: Benchmark run result that produced the artifacts.
+
+    Returns:
+        Deterministic manifest entry for the exported run.
+    """
+
+    scenario_tags = sorted(
+        {
+            tag
+            for scenario_result in run_result.scenario_results
+            for tag in scenario_result.tags
+        }
+    )
+    return {
+        "run_id": run_id,
+        "scenario_names": [
+            scenario_result.scenario_name
+            for scenario_result in run_result.scenario_results
+        ],
+        "scenario_tags": scenario_tags,
+        "artifacts": {
+            name: str(path.relative_to(output_dir))
+            for name, path in artifact_paths.items()
+        },
     }
 
 
