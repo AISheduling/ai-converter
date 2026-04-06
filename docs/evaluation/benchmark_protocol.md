@@ -90,6 +90,20 @@ values such as `run-001`, `run-002`, and so on.
 run aggregation, grouped summaries, and boxplot-ready rollups belong to
 `TASK-Bench-05`.
 
+Use `summarize_benchmark_experiment(...)` when you need grouped repeated-run
+statistics without introducing a second reporting layer. The grouped summary
+surface computes:
+
+- `mean`, `median`, `std`, `min`, `max`
+- quartiles and `IQR`
+- base-vs-drift rollups
+- drift-type, severity, and compatibility-class rollups
+- stage-metric aggregates when `BenchmarkMetrics.stage_metrics` is present
+
+Use `summarize_benchmark_telemetry(...)` only for timing summaries. Timing
+distributions stay sidecar-only and are never reconstructed from canonical
+benchmark JSON or CSV exports.
+
 ## Outputs
 
 Use `export_benchmark_reports(...)` to write one benchmark run into:
@@ -124,6 +138,24 @@ relative artifact paths written for each run. Canonical `benchmark.json` and
 `benchmark.csv` intentionally omit volatile wall-clock timing fields so repeated
 deterministic runs can produce stable machine-readable artifacts. Timing
 diagnostics remain in the optional telemetry sidecars.
+
+Grouped experiment exports also write:
+
+- `benchmark.summary.json` and `benchmark.summary.csv` for repeated-run summary
+  statistics
+- `benchmark.boxplot.csv` for long-form canonical boxplot-ready rows
+- `benchmark.telemetry.summary.json` and `benchmark.telemetry.summary.csv` for
+  timing-only grouped summaries
+- `benchmark.telemetry.boxplot.csv` for long-form timing distributions derived
+  strictly from telemetry sidecars
+
+`benchmark.boxplot.csv` is the canonical repeated-run distribution export. It
+contains one row per run, scenario, subject, and metric with machine-readable
+grouping columns such as `bundle_kind`, `drift_type`, `severity`, and
+`compatibility_class`.
+
+Use `benchmark.telemetry.boxplot.csv` for timing boxplots instead of mining
+timing fields back out of canonical artifacts.
 
 ## Minimal workflow
 
@@ -179,6 +211,21 @@ export_benchmark_experiment_reports(
 )
 ```
 
+The export above writes:
+
+- per-run canonical reports under `runs/<run_id>/`
+- grouped repeated-run summaries in `synthetic_benchmark.summary.json` and
+  `synthetic_benchmark.summary.csv`
+- boxplot-ready canonical rows in `synthetic_benchmark.boxplot.csv`
+- telemetry-only grouped timing summaries in
+  `synthetic_benchmark.telemetry.summary.json`,
+  `synthetic_benchmark.telemetry.summary.csv`, and
+  `synthetic_benchmark.telemetry.boxplot.csv`
+
+If you want a thin runnable wrapper over the same API, see
+`examples/synthetic_benchmark/run_example.py`. It stays offline and delegates to
+the library surface rather than introducing a second benchmark stack.
+
 ## Fixture guidance
 
 - Keep benchmark and drift fixtures deterministic.
@@ -191,3 +238,9 @@ export_benchmark_experiment_reports(
 
 See `examples/benchmark_config.json` for an illustrative synthetic benchmark
 layout you can adapt in a small local runner.
+
+For one ready-to-run offline workflow, use
+`examples/synthetic_benchmark/run_example.py`. It creates a small deterministic
+base/drift experiment, executes repeated runs through the same public library
+API described above, and writes grouped summary plus telemetry artifacts under
+`examples/synthetic_benchmark/generated/`.

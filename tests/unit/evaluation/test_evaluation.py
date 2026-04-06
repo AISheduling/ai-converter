@@ -2,24 +2,32 @@
 
 from __future__ import annotations
 
+import copy
+import csv
 import json
 import shutil
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel
 
 from ai_converter.compiler import compile_mapping_ir
 from ai_converter.evaluation import (
     BenchmarkCase,
+    BenchmarkExperimentResult,
     BenchmarkScenario,
     BenchmarkStageArtifacts,
     BenchmarkSubject,
+    build_benchmark_boxplot_rows,
+    build_benchmark_telemetry_boxplot_rows,
     build_synthetic_benchmark_scenario,
     compute_case_accuracy,
     compute_macro_micro_accuracy,
     compute_required_field_accuracy,
     export_benchmark_experiment_reports,
     export_benchmark_reports,
+    summarize_benchmark_experiment,
+    summarize_benchmark_telemetry,
     run_benchmark,
     run_repeated_benchmark,
 )
@@ -29,7 +37,7 @@ from ai_converter.validation import SemanticAssertion
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = ROOT / "tests" / "fixtures" / "synthetic_benchmark" / "drift"
-RAW_ROOT = ROOT / ".agent" / "tasks" / "TASK-Bench-04" / "raw"
+RAW_ROOT = ROOT / ".agent" / "tasks" / "TASK-Bench-05" / "raw"
 
 
 class DemoTask(BaseModel):
@@ -247,6 +255,60 @@ def test_repeated_runs_are_grouped_without_forking_a_second_harness() -> None:
     assert repeated.runs[1].result.model_dump(mode="json") == direct.model_dump(mode="json")
 
 
+def test_repeated_run_aggregation_computes_summary_statistics() -> None:
+    """Verify that repeated runs summarize canonical and stage metrics."""
+
+    subject = _build_planned_demo_subject(
+        [
+            {
+                "task": {"id": "T-1", "name": "Plan"},
+                "status": "ready",
+            },
+            {
+                "task": {"id": "T-1", "name": "Plan"},
+                "status": "done",
+            },
+            {
+                "task": {"id": "WRONG", "name": "Plan"},
+                "status": "ready",
+            },
+        ]
+    )
+    repeated = run_repeated_benchmark(
+        [subject],
+        [_build_demo_scenario()],
+        run_count=3,
+        experiment_name="demo-stats",
+    )
+
+    summary = summarize_benchmark_experiment(repeated)
+    required_row = _find_summary_row(
+        summary,
+        group_type="scenario_subject",
+        metric_group="benchmark",
+        metric_name="required_field_accuracy",
+        group_label="happy-path",
+    )
+    stage_row = _find_summary_row(
+        summary,
+        group_type="scenario_subject",
+        metric_group="stage",
+        metric_name="stage.build_success",
+        group_label="happy-path",
+    )
+
+    assert summary.run_count == 3
+    assert required_row.run_count == 3
+    assert required_row.statistics.mean == pytest.approx(2 / 3)
+    assert required_row.statistics.median == pytest.approx(0.5)
+    assert required_row.statistics.minimum == pytest.approx(0.5)
+    assert required_row.statistics.maximum == pytest.approx(1.0)
+    assert required_row.statistics.q1 == pytest.approx(0.5)
+    assert required_row.statistics.q3 == pytest.approx(0.75)
+    assert required_row.statistics.iqr == pytest.approx(0.25)
+    assert stage_row.statistics.mean == pytest.approx(1.0)
+
+
 def test_stage_artifacts_are_optional_but_supported() -> None:
     """Verify that optional stage metrics are preserved without a second model stack."""
 
@@ -361,6 +423,65 @@ def test_reporting_exports_machine_readable_and_md_outputs() -> None:
         shutil.rmtree(output_dir, ignore_errors=True)
 
 
+def test_reporting_exports_boxplot_ready_tables_without_breaking_canonical_reports() -> None:
+    """Verify that experiment exports include grouped summaries and boxplot rows."""
+
+    repeated = _build_synthetic_repeated_experiment(run_count=2)
+
+    output_dir = RAW_ROOT / "grouped-reporting-output"
+    shutil.rmtree(output_dir, ignore_errors=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        paths = export_benchmark_experiment_reports(
+            repeated,
+            output_dir,
+            stem="synthetic_benchmark",
+            include_telemetry=True,
+        )
+
+        manifest = json.loads(paths["experiment_json"].read_text(encoding="utf-8"))
+        assert manifest["summary_artifacts"]["summary_json"] == "synthetic_benchmark.summary.json"
+        assert manifest["summary_artifacts"]["boxplot_csv"] == "synthetic_benchmark.boxplot.csv"
+        assert manifest["telemetry_artifacts"]["summary_json"] == "synthetic_benchmark.telemetry.summary.json"
+
+        summary_payload = json.loads(paths["summary_json"].read_text(encoding="utf-8"))
+        assert summary_payload["run_count"] == 2
+        assert any(
+            row["group_type"] == "bundle_kind_subject"
+            and row["bundle_kind"] == "drift"
+            and row["metric_name"] == "pass_at_1"
+            for row in summary_payload["summary_rows"]
+        )
+
+        with paths["summary_csv"].open(encoding="utf-8", newline="") as handle:
+            summary_rows = list(csv.DictReader(handle))
+        assert any(
+            row["group_type"] == "scenario_subject"
+            and row["metric_name"] == "required_field_accuracy"
+            for row in summary_rows
+        )
+
+        with paths["boxplot_csv"].open(encoding="utf-8", newline="") as handle:
+            boxplot_rows = list(csv.DictReader(handle))
+        assert any(
+            row["metric_group"] == "benchmark"
+            and row["metric_name"] == "pass_at_1"
+            and row["bundle_kind"] == "drift"
+            for row in boxplot_rows
+        )
+        assert any(
+            row["metric_group"] == "stage"
+            and row["metric_name"] == "stage.build_success"
+            for row in boxplot_rows
+        )
+
+        first_json = (output_dir / "runs" / "run-001" / "synthetic_benchmark.json").read_text(encoding="utf-8")
+        _assert_timing_fields_absent(json.loads(first_json))
+    finally:
+        shutil.rmtree(output_dir, ignore_errors=True)
+
+
 def test_repeated_run_exports_use_grouped_layout_and_per_run_artifacts() -> None:
     """Verify that repeated benchmark exports keep per-run artifacts deterministic."""
 
@@ -414,6 +535,36 @@ def test_repeated_run_exports_use_grouped_layout_and_per_run_artifacts() -> None
         assert "# Benchmark Experiment Summary" in markdown
         assert "synthetic-suite" in markdown
         assert "run-001" in markdown
+        assert "## Scenario Summary" in markdown
+    finally:
+        shutil.rmtree(output_dir, ignore_errors=True)
+
+
+def test_markdown_summary_covers_grouped_base_vs_drift_results() -> None:
+    """Verify that grouped experiment Markdown highlights base versus drift."""
+
+    repeated = _build_synthetic_repeated_experiment(run_count=2)
+
+    output_dir = RAW_ROOT / "markdown-summary-output"
+    shutil.rmtree(output_dir, ignore_errors=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        paths = export_benchmark_experiment_reports(
+            repeated,
+            output_dir,
+            stem="synthetic_benchmark",
+            include_telemetry=True,
+        )
+        markdown = paths["experiment_markdown"].read_text(encoding="utf-8")
+
+        assert "## Scenario Summary" in markdown
+        assert "## Base vs Drift Comparison" in markdown
+        assert "## Drift Class Summary" in markdown
+        assert "## Timing Summary" in markdown
+        assert "synthetic-base / synthetic-compiled" in markdown
+        assert "drift / synthetic-compiled" in markdown
+        assert "rename / synthetic-compiled" in markdown
     finally:
         shutil.rmtree(output_dir, ignore_errors=True)
 
@@ -442,6 +593,163 @@ def test_canonical_benchmark_exports_are_reproducible_between_runs() -> None:
         _assert_timing_fields_absent(json.loads(first_json))
     finally:
         shutil.rmtree(output_dir, ignore_errors=True)
+
+
+def test_optional_telemetry_aggregation_uses_sidecar_inputs() -> None:
+    """Verify that timing summaries can be rebuilt from telemetry sidecar files."""
+
+    repeated = _build_synthetic_repeated_experiment(run_count=2)
+
+    output_dir = RAW_ROOT / "telemetry-summary-output"
+    shutil.rmtree(output_dir, ignore_errors=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        paths = export_benchmark_experiment_reports(
+            repeated,
+            output_dir,
+            stem="synthetic_benchmark",
+            include_telemetry=True,
+        )
+        telemetry_inputs = {
+            "run-001": output_dir / "runs" / "run-001" / "synthetic_benchmark.telemetry.json",
+            "run-002": output_dir / "runs" / "run-002" / "synthetic_benchmark.telemetry.json",
+        }
+        telemetry_rows = build_benchmark_telemetry_boxplot_rows(
+            telemetry_inputs,
+            experiment_name="synthetic-suite",
+        )
+        telemetry_summary = summarize_benchmark_telemetry(
+            telemetry_inputs,
+            experiment_name="synthetic-suite",
+        )
+
+        assert all(row.metric_group == "telemetry" for row in telemetry_rows)
+        assert any(row.metric_name == "runtime_seconds" for row in telemetry_rows)
+        assert any(row.bundle_kind == "drift" for row in telemetry_rows)
+        assert telemetry_summary.run_count == 2
+        assert any(
+            row.metric_name == "preparation_seconds"
+            for row in telemetry_summary.summary_rows
+        )
+
+        telemetry_payload = json.loads(paths["telemetry_summary_json"].read_text(encoding="utf-8"))
+        assert telemetry_payload["run_count"] == 2
+        assert any(
+            row["metric_name"] == "runtime_seconds"
+            and row["metric_group"] == "telemetry"
+            for row in telemetry_payload["summary_rows"]
+        )
+    finally:
+        shutil.rmtree(output_dir, ignore_errors=True)
+
+
+def _build_planned_demo_subject(
+    planned_outputs: list[dict[str, object]],
+) -> BenchmarkSubject:
+    """Build a deterministic subject that returns one planned output per run.
+
+    Args:
+        planned_outputs: Ordered outputs returned across repeated runs.
+
+    Returns:
+        Benchmark subject with deterministic repeated-run behavior.
+    """
+
+    remaining_outputs = [copy.deepcopy(output) for output in planned_outputs]
+
+    def _prepare() -> object:
+        planned_output = remaining_outputs.pop(0)
+        return lambda _record: copy.deepcopy(planned_output)
+
+    return BenchmarkSubject(
+        name="planned-baseline",
+        prepare=_prepare,
+        kind="baseline",
+    )
+
+
+def _find_summary_row(
+    summary: object,
+    *,
+    group_type: str,
+    metric_group: str,
+    metric_name: str,
+    group_label: str,
+    subject_name: str | None = None,
+) -> object:
+    """Find one summary row by its stable grouping identifiers.
+
+    Args:
+        summary: Grouped summary returned by the evaluation helpers.
+        group_type: Expected summary group type.
+        metric_group: Expected metric family.
+        metric_name: Expected metric name.
+        group_label: Expected human-readable group label.
+        subject_name: Optional subject name used to disambiguate rows.
+
+    Returns:
+        Matching grouped summary row.
+    """
+
+    for row in summary.summary_rows:
+        if (
+            row.group_type == group_type
+            and row.metric_group == metric_group
+            and row.metric_name == metric_name
+            and (
+                row.group_label == group_label
+                or row.group_label.startswith(f"{group_label} / ")
+            )
+            and (subject_name is None or row.subject_name == subject_name)
+        ):
+            return row
+    raise AssertionError(
+        f"Missing summary row for {group_type=}, {metric_group=}, {metric_name=}, {group_label=}"
+    )
+
+
+def _build_synthetic_repeated_experiment(run_count: int = 2) -> BenchmarkExperimentResult:
+    """Build a repeated synthetic benchmark experiment used by reporting tests.
+
+    Args:
+        run_count: Number of repeated benchmark runs.
+
+    Returns:
+        Repeated synthetic benchmark experiment.
+    """
+
+    base_bundle, drift_bundle = _build_synthetic_bundles()
+    subject = BenchmarkSubject.from_converter(
+        "synthetic-compiled",
+        _convert_synthetic_payload,
+        kind="compiled",
+        stage_artifacts=BenchmarkStageArtifacts(
+            source_structure_recovery=1.0,
+            mapping_quality=0.75,
+            artifacts={"trace_kind": "offline"},
+        ),
+    )
+    scenarios = [
+        build_synthetic_benchmark_scenario(
+            "synthetic-base",
+            [base_bundle],
+            target_model=SyntheticTarget,
+            required_fields=["tasks"],
+        ),
+        build_synthetic_benchmark_scenario(
+            "synthetic-drift-rename",
+            [drift_bundle],
+            target_model=SyntheticTarget,
+            required_fields=["tasks"],
+        ),
+    ]
+    return run_repeated_benchmark(
+        [subject],
+        scenarios,
+        run_count=run_count,
+        experiment_name="synthetic-suite",
+    )
 
 
 def _build_synthetic_bundles() -> tuple[object, object]:

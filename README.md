@@ -412,6 +412,75 @@ artifacts. If you need timing diagnostics, call
 `export_benchmark_reports(..., include_telemetry=True)` and read the separate
 `<stem>.telemetry.json` sidecar.
 
+### Example: aggregate repeated synthetic benchmark runs
+
+```python
+from pathlib import Path
+
+from ai_converter.evaluation import (
+    BenchmarkStageArtifacts,
+    BenchmarkSubject,
+    build_synthetic_benchmark_scenario,
+    export_benchmark_experiment_reports,
+    run_repeated_benchmark,
+)
+
+subject = BenchmarkSubject.from_converter(
+    "synthetic-compiled",
+    convert_synthetic_payload,
+    kind="compiled",
+    stage_artifacts=BenchmarkStageArtifacts(mapping_quality=0.75),
+)
+scenarios = [
+    build_synthetic_benchmark_scenario("synthetic-base", [base_bundle], required_fields=["tasks"]),
+    build_synthetic_benchmark_scenario("synthetic-drift-rename", [rename_bundle], required_fields=["tasks"]),
+]
+
+experiment = run_repeated_benchmark(
+    [subject],
+    scenarios,
+    run_count=3,
+    experiment_name="synthetic-demo",
+)
+paths = export_benchmark_experiment_reports(
+    experiment,
+    Path("benchmark_artifacts"),
+    stem="synthetic_benchmark",
+    include_telemetry=True,
+)
+
+print(paths["summary_json"])
+print(paths["boxplot_csv"])
+print(paths["telemetry_boxplot_csv"])
+```
+
+This stays library-first: there is no required CLI. The grouped export writes
+canonical repeated-run summaries to `*.summary.json` / `*.summary.csv`, long-form
+distribution rows to `*.boxplot.csv`, and timing-only distributions to
+`*.telemetry.boxplot.csv`. If you want a thin runnable wrapper around the same
+API, see `examples/synthetic_benchmark/run_example.py`.
+
+For one end-to-end offline reference flow, run:
+
+```bash
+python examples/synthetic_benchmark/run_example.py --run-count 2
+```
+
+The example writes per-run canonical reports under
+`examples/synthetic_benchmark/generated/runs/` and grouped summary or boxplot
+artifacts under `examples/synthetic_benchmark/generated/`.
+
+If you want the same workflow as a tiny runnable example, use the thin example
+runner under `examples/synthetic_benchmark/run_example.py`:
+
+```bash
+python examples/synthetic_benchmark/run_example.py --run-count 2
+```
+
+It stays offline, generates a small deterministic base-plus-drift experiment,
+and writes canonical per-run reports plus grouped summary and telemetry
+artifacts under `examples/synthetic_benchmark/generated/`.
+
 ## Use The Synthetic Benchmark Foundation
 
 The deterministic synthetic benchmark foundation lives under

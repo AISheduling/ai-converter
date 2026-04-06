@@ -51,12 +51,22 @@
     "experiment": [
       "benchmark.experiment.json",
       "benchmark.experiment.md",
-      "runs/<run_id>/benchmark.json"
+      "benchmark.summary.json",
+      "benchmark.summary.csv",
+      "benchmark.boxplot.csv",
+      "benchmark.telemetry.summary.json",
+      "benchmark.telemetry.summary.csv",
+      "benchmark.telemetry.boxplot.csv",
+      "runs/<run_id>/benchmark.json",
+      "runs/<run_id>/benchmark.telemetry.json"
     ]
   },
+  "runner_example": "examples/synthetic_benchmark/run_example.py",
   "notes": [
     "This file is illustrative only; the benchmark layer stays library-first.",
     "Repeated runs should reuse run_repeated_benchmark(...) instead of introducing a second harness.",
-    "Keep benchmark subjects, scenarios, and assertions offline and deterministic."
+    "Keep benchmark subjects, scenarios, and assertions offline and deterministic.",
+    "Use benchmark.boxplot.csv for canonical repeated-run metric distributions and benchmark.telemetry.boxplot.csv for timing distributions.",
+    "examples/synthetic_benchmark/run_example.py is the thin runnable example for this workflow."
   ]
 }

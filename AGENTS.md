@@ -63,11 +63,16 @@ Installed workflow agents:
 
 - Drift detection code lives under `src/ai_converter/drift/`.
 - Benchmark and reporting code lives under `src/ai_converter/evaluation/`.
+- Repeated-run aggregation helpers now live in `src/ai_converter/evaluation/aggregation.py`, and grouped export wiring stays in `src/ai_converter/evaluation/reporting.py`.
+- Thin runnable synthetic benchmark example lives at `examples/synthetic_benchmark/run_example.py`.
 - Drift fixtures live under `tests/fixtures/drift/`.
 - Focused drift and evaluation tests live under `tests/unit/drift/` and `tests/unit/evaluation/`.
+- Synthetic benchmark workflow smoke coverage lives under `tests/integration/converter_pipeline/`.
 - Benchmark protocol docs live under `docs/evaluation/benchmark_protocol.md`.
 - Example benchmark configs live under `examples/`.
+- Thin offline synthetic benchmark runner examples live under `examples/synthetic_benchmark/`.
 - Preferred drift/evaluation verification command is `python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider`.
+- Preferred synthetic benchmark reporting verification command is `python -m pytest tests/unit/evaluation tests/integration/converter_pipeline -q -p no:cacheprovider`.
 - Keep drift heuristics, patch application, and benchmark/reporting tests offline; use fake or deterministic converters and do not call live models or the network.
 
 ## Synthetic Benchmark Foundation Notes
@@ -104,6 +109,7 @@ Installed workflow agents:
 - Focused synthetic benchmark tests run with `python -m pytest tests/unit/synthetic_benchmark -q -p no:cacheprovider`.
 - Focused synthetic LLM-template tests run with `python -m pytest tests/unit/synthetic_benchmark/generators_llm -q -p no:cacheprovider`.
 - Benchmark examples live under `examples/`, and benchmark protocol docs live under `docs/evaluation/`.
+- The thin offline synthetic benchmark example runner lives under `examples/synthetic_benchmark/run_example.py`.
 - Synthetic benchmark architecture docs live under `docs/synthetic_benchmark/`.
 - `tests/integration/converter_pipeline/` may reuse deterministic profiling fixtures or local inline models, but must stay offline and must not modify `dsl-core/`.
 - Do not modify `dsl-core/` while building `TargetSchemaCard`; use it only as the external L1 reference surface.
