@@ -109,6 +109,22 @@ Command:
 python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider
 ```
 
+### Synthetic benchmark foundation
+
+Fixtures:
+
+- `tests/fixtures/synthetic_benchmark/bundles/`
+
+Tests:
+
+- `tests/unit/synthetic_benchmark/`
+
+Command:
+
+```bash
+python -m pytest tests/unit/synthetic_benchmark -q -p no:cacheprovider
+```
+
 ## Combined Focused Run
 
 Use this when you touch the offline pipeline from mapping-ir through compiled execution:
@@ -156,6 +172,7 @@ poetry run python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cach
 - `tests/integration/` contains smoke integration suites for compiled execution and validation
 - `tests/fixtures/` contains deterministic input data used by tests
 - `tests/fixtures/drift/` contains synthetic baseline and drifted source payloads for drift and evaluation tests
+- `tests/fixtures/synthetic_benchmark/bundles/` contains repo-local fixture roots for persisted synthetic bundles
 
 ## Notes
 

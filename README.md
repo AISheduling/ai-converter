@@ -394,6 +394,48 @@ artifacts. If you need timing diagnostics, call
 `export_benchmark_reports(..., include_telemetry=True)` and read the separate
 `<stem>.telemetry.json` sidecar.
 
+## Use The Synthetic Benchmark Foundation
+
+The deterministic synthetic benchmark foundation lives under
+`src/ai_converter/synthetic_benchmark/`.
+
+It helps you:
+
+- sample canonical task scenarios reproducibly from a seed
+- render the same scenario into a gold `L1` payload and a configurable `L0` payload
+- persist repo-local synthetic bundles for later drift and benchmark tasks
+
+### Example: sample, render, and persist one bundle
+
+```python
+from pathlib import Path
+
+from ai_converter.synthetic_benchmark import (
+    BundleStore,
+    L0TemplateSpec,
+    ScenarioSamplerConfig,
+    sample_canonical_scenario,
+)
+
+sampled = sample_canonical_scenario(
+    7,
+    ScenarioSamplerConfig(task_count=2, include_assignees=True, include_tags=True),
+)
+store = BundleStore()
+bundle = store.build_bundle(
+    sampled,
+    L0TemplateSpec(),
+    dataset_id="synthetic-demo",
+    bundle_id="bundle-1",
+    created_at="2026-04-06T00:00:00+00:00",
+)
+paths = store.save(bundle, Path("synthetic_bundle"))
+
+print(paths.scenario_path)
+print(paths.l0_path)
+print(paths.l1_path)
+```
+
 ## Package Layout
 
 - `src/ai_converter/profiling/` contains the deterministic profiling layer
@@ -404,12 +446,14 @@ artifacts. If you need timing diagnostics, call
 - `src/ai_converter/validation/` contains structural, semantic, acceptance, and repair-loop validation
 - `src/ai_converter/drift/` contains drift classification, deterministic heuristics, and local patch application
 - `src/ai_converter/evaluation/` contains benchmark metrics, orchestration, and reporting
+- `src/ai_converter/synthetic_benchmark/` contains deterministic synthetic scenario sampling, renderers, and bundle storage
 - `prompts/` contains versioned prompt template files
 - `docs/architecture/profiling.md` documents the profiling design
 - `docs/architecture/schema_contracts.md` documents the schema contract layer
 - `docs/prompts/mapping_ir.md` documents the MappingIR prompt layer
 - `docs/architecture/compiler_and_validation.md` documents the execution and validation design
 - `docs/evaluation/benchmark_protocol.md` documents the benchmark and evaluation workflow
+- `docs/synthetic_benchmark/architecture.md` documents the synthetic benchmark foundation
 - `examples/benchmark_config.json` shows an illustrative benchmark layout
 
 ## Project Notes

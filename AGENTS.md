@@ -70,6 +70,14 @@ Installed workflow agents:
 - Preferred drift/evaluation verification command is `python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider`.
 - Keep drift heuristics, patch application, and benchmark/reporting tests offline; use fake or deterministic converters and do not call live models or the network.
 
+## Synthetic Benchmark Foundation Notes
+
+- Deterministic synthetic benchmark foundation code lives under `src/ai_converter/synthetic_benchmark/`.
+- Synthetic bundle fixtures live under `tests/fixtures/synthetic_benchmark/bundles/`.
+- Focused synthetic benchmark tests live under `tests/unit/synthetic_benchmark/`.
+- Preferred synthetic benchmark verification command is `python -m pytest tests/unit/synthetic_benchmark -q -p no:cacheprovider`.
+- Keep synthetic benchmark sampling, renderers, and bundle-store tests offline; do not call live models or the network.
+
 ## Project Notes
 
 - The profiling layer lives under `src/ai_converter/profiling/`.
@@ -86,6 +94,10 @@ Installed workflow agents:
 - Focused compiler/validation tests run with `python -m pytest tests/unit/compiler tests/unit/validation tests/integration/converter_pipeline -q -p no:cacheprovider`.
 - Deterministic drift detection and benchmark evaluation live under `src/ai_converter/drift/` and `src/ai_converter/evaluation/`.
 - Focused drift/evaluation tests run with `python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cacheprovider`.
+- Deterministic synthetic benchmark foundations live under `src/ai_converter/synthetic_benchmark/`.
+- Focused synthetic benchmark fixtures live under `tests/fixtures/synthetic_benchmark/bundles/`.
+- Focused synthetic benchmark tests run with `python -m pytest tests/unit/synthetic_benchmark -q -p no:cacheprovider`.
 - Benchmark examples live under `examples/`, and benchmark protocol docs live under `docs/evaluation/`.
+- Synthetic benchmark architecture docs live under `docs/synthetic_benchmark/`.
 - `tests/integration/converter_pipeline/` may reuse deterministic profiling fixtures or local inline models, but must stay offline and must not modify `dsl-core/`.
 - Do not modify `dsl-core/` while building `TargetSchemaCard`; use it only as the external L1 reference surface.
