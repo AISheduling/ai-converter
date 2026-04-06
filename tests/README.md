@@ -116,16 +116,25 @@ Fixtures:
 
 - `tests/fixtures/synthetic_benchmark/bundles/`
 - `tests/fixtures/synthetic_benchmark/drift/`
+- `tests/fixtures/synthetic_benchmark/llm_templates/`
 
 Tests:
 
 - `tests/unit/synthetic_benchmark/`
 - includes heterogeneous rendering and synthetic drift coverage under `tests/unit/synthetic_benchmark/drift/`
+- `tests/unit/synthetic_benchmark/generators_llm/`
+- includes offline cache, prompt, and bounded-retry coverage for LLM-assisted template generation
 
 Command:
 
 ```bash
 python -m pytest tests/unit/synthetic_benchmark -q -p no:cacheprovider
+```
+
+LLM-template generator command:
+
+```bash
+python -m pytest tests/unit/synthetic_benchmark/generators_llm -q -p no:cacheprovider
 ```
 
 ## Combined Focused Run
@@ -177,6 +186,7 @@ poetry run python -m pytest tests/unit/drift tests/unit/evaluation -q -p no:cach
 - `tests/fixtures/drift/` contains synthetic baseline and drifted source payloads for drift and evaluation tests
 - `tests/fixtures/synthetic_benchmark/bundles/` contains repo-local fixture roots for persisted synthetic bundles
 - `tests/fixtures/synthetic_benchmark/drift/` contains deterministic drift specs and lineage-oriented synthetic drift fixtures
+- `tests/fixtures/synthetic_benchmark/llm_templates/` contains deterministic accepted-template and cache fixtures
 
 ## Notes
 

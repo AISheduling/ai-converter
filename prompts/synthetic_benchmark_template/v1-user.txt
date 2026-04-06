@@ -1,0 +1,23 @@
+Goal:
+$generation_goal
+
+Base template:
+$base_template_json
+
+Dry-run canonical scenario:
+$dry_run_scenario_json
+
+Accepted template fingerprints that should not be duplicated:
+$accepted_fingerprints_json
+
+Additional guidance:
+$guidance_notes
+
+Allow replacement-style patches:
+$allow_patches
+
+Prior validation failures to avoid repeating:
+$prior_failures
+
+Required output schema:
+$output_schema_json

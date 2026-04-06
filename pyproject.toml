@@ -16,7 +16,7 @@ dependencies = [
 ai-converter = "ai_converter.cli:main"
 
 [tool.poetry]
-packages = [{ include = "llm_converter", from = "src" }]
+packages = [{ include = "ai_converter", from = "src" }]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.2"

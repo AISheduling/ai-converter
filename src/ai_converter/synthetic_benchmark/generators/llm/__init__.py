@@ -1,12 +1,16 @@
-"""Synthetic benchmark generators."""
+"""Public exports for LLM-assisted synthetic template generation."""
 
-from .deterministic.scenario_sampler import sample_canonical_scenario
-from .llm import (
+from .cache import (
     AcceptedTemplateCache,
+    build_cache_key,
+    build_prompt_hash,
+    canonical_json_hash,
+    template_fingerprint,
+)
+from .generator import SyntheticTemplateLLMGenerator
+from .models import (
     AcceptedTemplateCacheEntry,
     L0TemplatePatch,
-    SyntheticTemplateLLMGenerator,
-    TemplateCandidateValidator,
     TemplateGenerationAttemptRecord,
     TemplateGenerationCandidate,
     TemplateGenerationRequest,
@@ -14,12 +18,9 @@ from .llm import (
     TemplateValidationReport,
     ValidationGateResult,
     ValidationIssue,
-    build_cache_key,
-    build_prompt_hash,
-    canonical_json_hash,
-    render_template_generation_prompt,
-    template_fingerprint,
 )
+from .prompt_builder import render_template_generation_prompt
+from .validator import TemplateCandidateValidator
 
 __all__ = [
     "AcceptedTemplateCache",
@@ -38,6 +39,5 @@ __all__ = [
     "build_prompt_hash",
     "canonical_json_hash",
     "render_template_generation_prompt",
-    "sample_canonical_scenario",
     "template_fingerprint",
 ]

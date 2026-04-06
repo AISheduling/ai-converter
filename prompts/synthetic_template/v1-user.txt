@@ -1,0 +1,20 @@
+Goal:
+$prompt_objective
+
+Base template:
+$base_template_json
+
+Required output schema:
+$output_schema_json
+
+Required canonical semantics to preserve:
+$required_semantics_json
+
+Already accepted normalized template fingerprints:
+$accepted_fingerprints_json
+
+Additional instructions:
+$additional_instructions
+
+Previous rejection feedback:
+$previous_feedback

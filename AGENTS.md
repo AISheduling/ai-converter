@@ -75,9 +75,11 @@ Installed workflow agents:
 - Deterministic synthetic benchmark foundation code lives under `src/ai_converter/synthetic_benchmark/`.
 - Synthetic bundle fixtures live under `tests/fixtures/synthetic_benchmark/bundles/`.
 - Synthetic drift fixtures live under `tests/fixtures/synthetic_benchmark/drift/`.
+- Synthetic LLM-template fixtures live under `tests/fixtures/synthetic_benchmark/llm_templates/`.
 - Focused synthetic benchmark tests live under `tests/unit/synthetic_benchmark/`.
-- Preferred synthetic benchmark verification command is `python -m pytest tests/unit/synthetic_benchmark -q -p no:cacheprovider`.
-- Keep synthetic benchmark sampling, shape-variant rendering, drift generation, and bundle-store tests offline; do not call live models or the network.
+- Focused LLM-template generator tests live under `tests/unit/synthetic_benchmark/generators_llm/`.
+- Preferred synthetic benchmark verification commands are `python -m pytest tests/unit/synthetic_benchmark -q -p no:cacheprovider` and `python -m pytest tests/unit/synthetic_benchmark/generators_llm -q -p no:cacheprovider`.
+- Keep synthetic benchmark sampling, shape-variant rendering, LLM-template generation, drift generation, and bundle-store tests offline; do not call live models or the network.
 
 ## Project Notes
 
@@ -98,7 +100,9 @@ Installed workflow agents:
 - Deterministic synthetic benchmark foundations live under `src/ai_converter/synthetic_benchmark/`.
 - Focused synthetic benchmark fixtures live under `tests/fixtures/synthetic_benchmark/bundles/`.
 - Focused synthetic drift fixtures live under `tests/fixtures/synthetic_benchmark/drift/`.
+- Focused synthetic LLM-template fixtures live under `tests/fixtures/synthetic_benchmark/llm_templates/`.
 - Focused synthetic benchmark tests run with `python -m pytest tests/unit/synthetic_benchmark -q -p no:cacheprovider`.
+- Focused synthetic LLM-template tests run with `python -m pytest tests/unit/synthetic_benchmark/generators_llm -q -p no:cacheprovider`.
 - Benchmark examples live under `examples/`, and benchmark protocol docs live under `docs/evaluation/`.
 - Synthetic benchmark architecture docs live under `docs/synthetic_benchmark/`.
 - `tests/integration/converter_pipeline/` may reuse deterministic profiling fixtures or local inline models, but must stay offline and must not modify `dsl-core/`.

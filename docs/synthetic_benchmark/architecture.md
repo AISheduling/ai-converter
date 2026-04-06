@@ -11,6 +11,9 @@ lineage-aware drift bundle persistence.
 - `render_l1_payload(...)` continues to produce the gold target payload.
 - `render_l0_payload(...)` can now project the same scenario into multiple
   deterministic source-side shapes through template-level shape variants.
+- `LLMTemplateGenerator` can synthesize additional `L0TemplateSpec` candidates
+  through the shared `ai_converter.llm` boundary, but the generated output is
+  still only a template surface layered on top of the same canonical scenario.
 - Synthetic drift mutates only `L0` bundle surfaces. It does not change the
   canonical scenario and does not require live models or network access.
 - Drift bundles keep explicit lineage back to a parent base bundle.
@@ -22,6 +25,8 @@ lineage-aware drift bundle persistence.
 - `templates/models.py`: `L0TemplateSpec`
 - `templates/shape_variants.py`: deterministic same-type record variants
 - `generators/deterministic/scenario_sampler.py`: seeded deterministic sampling
+- `generators/llm/`: prompt building, validation gates, accepted-template cache,
+  and bounded LLM-assisted template generation
 - `renderers/l1_renderer.py`: canonical `L1` projection
 - `renderers/l0_renderer.py`: template-driven and shape-aware `L0` projection
 - `drift_generation/models.py`: versioned drift specs and applied manifests
@@ -73,3 +78,5 @@ python -m pytest tests/unit/synthetic_benchmark -q -p no:cacheprovider
 The package remains intentionally offline-only. Synthetic drift exists to
 produce reproducible `L0` changes and lineage artifacts, not to replace the
 shared `ai_converter.drift` classifier or later benchmark/reporting tasks.
+LLM-assisted template generation follows the same rule: tests stay offline
+through fake adapters and cached trace artifacts.

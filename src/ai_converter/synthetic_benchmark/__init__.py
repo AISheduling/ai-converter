@@ -15,6 +15,25 @@ from .drift_generation import (
     SplitFieldOperator,
     apply_drift_to_payload,
 )
+from .generators.llm import (
+    AcceptedTemplateCache,
+    AcceptedTemplateCacheEntry,
+    L0TemplatePatch,
+    SyntheticTemplateLLMGenerator,
+    TemplateCandidateValidator,
+    TemplateGenerationAttemptRecord,
+    TemplateGenerationCandidate,
+    TemplateGenerationRequest,
+    TemplateGenerationResult,
+    TemplateValidationReport,
+    ValidationGateResult,
+    ValidationIssue,
+    build_cache_key,
+    build_prompt_hash,
+    canonical_json_hash,
+    render_template_generation_prompt,
+    template_fingerprint,
+)
 from .generators.deterministic.scenario_sampler import sample_canonical_scenario
 from .renderers.l0_renderer import render_l0_payload
 from .renderers.l1_renderer import render_l1_payload
@@ -36,6 +55,8 @@ from .templates import (
 
 __all__ = [
     "AddFieldOperator",
+    "AcceptedTemplateCache",
+    "AcceptedTemplateCacheEntry",
     "AppliedDriftManifest",
     "BundleStore",
     "BundleStoreExport",
@@ -51,6 +72,7 @@ __all__ = [
     "DropOptionalFieldOperator",
     "FlattenFieldOperator",
     "InjectSparseObjectsOperator",
+    "L0TemplatePatch",
     "L0TemplateSpec",
     "MergeFieldsOperator",
     "NestFieldOperator",
@@ -60,10 +82,24 @@ __all__ = [
     "ShapeVariantPolicy",
     "ShapeVariantSpec",
     "SplitFieldOperator",
+    "SyntheticTemplateLLMGenerator",
     "TaskFieldAliases",
+    "TemplateCandidateValidator",
+    "TemplateGenerationAttemptRecord",
+    "TemplateGenerationCandidate",
+    "TemplateGenerationRequest",
+    "TemplateGenerationResult",
+    "TemplateValidationReport",
+    "ValidationGateResult",
+    "ValidationIssue",
     "apply_drift_to_payload",
+    "build_cache_key",
+    "build_prompt_hash",
+    "canonical_json_hash",
     "render_l0_payload",
     "render_l1_payload",
+    "render_template_generation_prompt",
     "sample_canonical_scenario",
     "select_shape_variant",
+    "template_fingerprint",
 ]

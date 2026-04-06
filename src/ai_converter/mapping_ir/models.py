@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing_extensions import TypeAliasType
 
 SUPPORTED_OPERATION_KINDS = (
     "copy",
@@ -37,6 +38,9 @@ OperationKind = Literal[
     "drop",
     "validate",
 ]
+
+JsonScalar = TypeAliasType("JsonScalar", str | int | float | bool | None)
+JsonValue = TypeAliasType("JsonValue", JsonScalar | list["JsonValue"] | dict[str, "JsonValue"])
 
 
 class SourceReference(BaseModel):
@@ -96,7 +100,7 @@ class StepOperation(BaseModel):
         delimiter: Delimiter used by ``split`` or ``merge``.
         child_path: Nested child path used by ``unnest``.
         expression: Deterministic expression used by ``derive``.
-        value: Literal default value used by ``default``.
+        value: JSON-compatible default value used by ``default``.
         predicate: Validation predicate used by ``validate``.
         message: Human-readable validation message.
     """
@@ -116,7 +120,7 @@ class StepOperation(BaseModel):
     delimiter: str | None = None
     child_path: str | None = None
     expression: str | None = None
-    value: Any = None
+    value: JsonValue = None
     predicate: str | None = None
     message: str | None = None
 
@@ -272,7 +276,7 @@ class ConditionClause(BaseModel):
     Attributes:
         kind: Condition kind such as ``exists`` or ``non_null``.
         ref: Referenced source ref or step id.
-        value: Optional comparison value.
+        value: Optional JSON-compatible comparison value.
         description: Optional human-readable explanation.
     """
 
@@ -280,7 +284,7 @@ class ConditionClause(BaseModel):
 
     kind: Literal["exists", "non_null", "equals"] = "exists"
     ref: str = Field(min_length=1)
-    value: Any = None
+    value: JsonValue = None
     description: str | None = None
 
     @field_validator("ref")

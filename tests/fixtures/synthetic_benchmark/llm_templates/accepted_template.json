@@ -1,0 +1,42 @@
+{
+  "version": "1.0",
+  "template_id": "cached_wrapped_template",
+  "root_mode": "object",
+  "records_key": "items",
+  "wrap_task_object": true,
+  "task_object_key": "task",
+  "field_aliases": {
+    "entity_id": "task_id",
+    "name": "task_name",
+    "status": "status_text",
+    "duration_days": "duration_days",
+    "assignee": "owner",
+    "tags": "labels"
+  },
+  "optional_fields": [
+    "assignee"
+  ],
+  "extra_fields": {
+    "source": "llm-cache"
+  },
+  "shape_variant_policy": {
+    "version": "1.0",
+    "assignment_mode": "round_robin",
+    "selection_salt": "llm-cache",
+    "variants": [
+      {
+        "variant_id": "wrapped",
+        "wrap_task_object": true,
+        "task_object_key": "task",
+        "record_envelope_key": "entry",
+        "optional_fields": [
+          "assignee"
+        ],
+        "rare_extra_fields": {
+          "shape": "wrapped"
+        },
+        "vendor_extra_fields": {}
+      }
+    ]
+  }
+}

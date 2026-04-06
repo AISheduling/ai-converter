@@ -422,8 +422,63 @@ It helps you:
 - sample canonical task scenarios reproducibly from a seed
 - render the same scenario into a gold `L1` payload and a configurable `L0` payload
 - apply deterministic shape-variant policies so same-type records can render with different source-side field sets
+- synthesize additional `L0TemplateSpec` candidates through the shared offline-testable `ai_converter.llm` boundary
 - apply versioned synthetic drift specs to `L0` payloads without changing the canonical scenario
 - persist repo-local base and drift bundles with lineage metadata for later drift and benchmark tasks
+
+LLM-assisted template generation lives under
+`src/ai_converter/synthetic_benchmark/generators/llm/`. It reuses the shared
+`LLMAdapter`, file-backed prompt bundles, fake-backed tests, and
+`LLMResponse.to_trace_artifact()` export surface rather than introducing a
+second LLM stack. Accepted templates can be cached deterministically and
+replayed without another adapter call when the same cache key is reused.
+
+### Example: run the offline template generator with a fake adapter
+
+```python
+from ai_converter.llm import FakeLLMAdapter, FakeLLMReply
+from ai_converter.synthetic_benchmark import (
+    SyntheticTemplateLLMGenerator,
+    TemplateGenerationRequest,
+)
+
+adapter = FakeLLMAdapter(
+    structured_replies=[
+        FakeLLMReply(
+            parsed_payload={
+                "template": {
+                    "template_id": "wrapped_source_v1",
+                    "root_mode": "object",
+                    "records_key": "items",
+                    "wrap_task_object": True,
+                    "task_object_key": "task",
+                    "field_aliases": {
+                        "entity_id": "task_id",
+                        "name": "title",
+                        "status": "state",
+                        "duration_days": "days",
+                        "assignee": "owner",
+                        "tags": "labels",
+                    },
+                    "optional_fields": ["assignee", "tags"],
+                    "extra_fields": {"surface": "llm"},
+                }
+            }
+        )
+    ]
+)
+
+result = SyntheticTemplateLLMGenerator(adapter).generate(
+    TemplateGenerationRequest(
+        guidance_notes=["Prefer wrapped task objects."],
+        llm_model_config={"model": "fake-template-model"},
+    )
+)
+
+print(result.status)
+print(result.accepted_template.template_id)
+print(result.validation_report.normalized_fingerprint)
+```
 
 ### Example: sample, render, and persist one bundle
 
@@ -507,6 +562,48 @@ print(paths.drift_manifest_path)
 print(paths.lineage_path)
 ```
 
+### Example: generate and cache one accepted template offline
+
+```python
+from pathlib import Path
+
+from ai_converter.llm import FakeLLMAdapter, FakeLLMReply
+from ai_converter.synthetic_benchmark import (
+    L0TemplateSpec,
+    LLMTemplateGenerator,
+    TemplateCacheStore,
+    TemplateGenerationRequest,
+    sample_canonical_scenario,
+)
+
+request = TemplateGenerationRequest(
+    scenario=sample_canonical_scenario(7).scenario,
+    base_template=L0TemplateSpec(),
+    model_config={"model": "fake-template-model", "temperature": 0},
+)
+adapter = FakeLLMAdapter(
+    structured_replies=[
+        FakeLLMReply(
+            parsed_payload={
+                "template": {
+                    "extra_fields": {"source": "llm-generated"}
+                },
+                "rationale": "add a visible source marker",
+            }
+        )
+    ]
+)
+generator = LLMTemplateGenerator(
+    adapter,
+    cache_store=TemplateCacheStore(Path("synthetic_template_cache")),
+)
+result = generator.generate(request)
+
+print(result.accepted)
+print(result.cache_hit)
+print(result.accepted_template.extra_fields["source"])
+```
+
 ## Package Layout
 
 - `src/ai_converter/profiling/` contains the deterministic profiling layer
@@ -517,7 +614,7 @@ print(paths.lineage_path)
 - `src/ai_converter/validation/` contains structural, semantic, acceptance, and repair-loop validation
 - `src/ai_converter/drift/` contains drift classification, deterministic heuristics, and local patch application
 - `src/ai_converter/evaluation/` contains benchmark metrics, orchestration, and reporting
-- `src/ai_converter/synthetic_benchmark/` contains deterministic synthetic scenario sampling, shape variants, drift generation, and lineage-aware bundle storage
+- `src/ai_converter/synthetic_benchmark/` contains deterministic synthetic scenario sampling, shape variants, LLM-assisted template generation, drift generation, and lineage-aware bundle storage
 - `prompts/` contains versioned prompt template files
 - `docs/architecture/profiling.md` documents the profiling design
 - `docs/architecture/schema_contracts.md` documents the schema contract layer
@@ -526,6 +623,7 @@ print(paths.lineage_path)
 - `docs/evaluation/benchmark_protocol.md` documents the benchmark and evaluation workflow
 - `docs/synthetic_benchmark/architecture.md` documents the synthetic benchmark foundation
 - `docs/synthetic_benchmark/drift.md` documents synthetic drift generation and lineage
+- `docs/synthetic_benchmark/generators.md` documents the synthetic template generator, validation gates, and cache behavior
 - `examples/benchmark_config.json` shows an illustrative benchmark layout
 
 ## Project Notes
