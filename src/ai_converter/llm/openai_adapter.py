@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+from copy import deepcopy
 from typing import Any, Mapping, TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -97,7 +98,7 @@ class OpenAILLMAdapter(LLMAdapter):
         schema: type[StructuredModelT],
         metadata: Mapping[str, Any] | None = None,
     ) -> LLMResponse[StructuredModelT]:
-        """Generate structured output using the OpenAI parse helper.
+        """Generate structured output using explicit strict Responses formatting.
 
         Args:
             prompt: Rendered prompt envelope to send to the OpenAI client.
@@ -110,11 +111,10 @@ class OpenAILLMAdapter(LLMAdapter):
 
         combined_metadata = self._combined_metadata(prompt, metadata)
         try:
-            response = self._client_instance().responses.parse(
-                model=self._model,
-                input=self._input_items(prompt),
-                text_format=schema,
-                metadata=self._request_metadata(combined_metadata) or None,
+            response, response_metadata = self._structured_response(
+                prompt,
+                schema=schema,
+                metadata=combined_metadata,
             )
             raw_text = self._response_text(response)
             parsed = self._parsed_output(response, schema=schema, raw_text=raw_text)
@@ -122,11 +122,57 @@ class OpenAILLMAdapter(LLMAdapter):
                 raw_text=raw_text,
                 parsed=parsed,
                 usage=self._usage(response),
-                metadata=combined_metadata,
+                metadata=response_metadata,
                 prompt=prompt,
             )
         except Exception as error:  # pragma: no cover - exercised via adapter tests
             return self._error_response(prompt, combined_metadata, error)
+
+    def _structured_response(
+        self,
+        prompt: PromptEnvelope,
+        *,
+        schema: type[StructuredModelT],
+        metadata: Mapping[str, Any],
+    ) -> tuple[Any, dict[str, Any]]:
+        """Create one structured response, retrying with JSON mode when needed.
+
+        Args:
+            prompt: Rendered prompt envelope to send to the OpenAI client.
+            schema: Pydantic schema used for structured parsing.
+            metadata: Deterministic merged metadata for the request.
+
+        Returns:
+            Tuple of raw response object and trace metadata for the chosen mode.
+        """
+
+        request_metadata = self._request_metadata(metadata) or None
+        try:
+            return (
+                self._client_instance().responses.create(
+                    model=self._model,
+                    input=self._input_items(prompt),
+                    text={"format": self._text_format(schema)},
+                    metadata=request_metadata,
+                ),
+                {**metadata, "structured_output_mode": "json_schema_strict"},
+            )
+        except Exception as error:
+            if not self._should_retry_with_json_object(error):
+                raise
+            return (
+                self._client_instance().responses.create(
+                    model=self._model,
+                    input=self._input_items(prompt),
+                    text={"format": {"type": "json_object"}},
+                    metadata=request_metadata,
+                ),
+                {
+                    **metadata,
+                    "structured_output_mode": "json_object_fallback",
+                    "structured_output_fallback_reason": str(error),
+                },
+            )
 
     def _client_instance(self) -> Any:
         """Return the injected or lazily created OpenAI client.
@@ -197,6 +243,150 @@ class OpenAILLMAdapter(LLMAdapter):
             request_metadata[str(key)] = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True)
         return request_metadata
 
+    @classmethod
+    def _text_format(cls, schema: type[StructuredModelT]) -> dict[str, Any]:
+        """Build an explicit strict Responses API text-format payload.
+
+        Args:
+            schema: Pydantic model type expected from the response.
+
+        Returns:
+            Responses API ``text.format`` payload with strict JSON Schema.
+        """
+
+        return {
+            "type": "json_schema",
+            "strict": True,
+            "name": schema.__name__,
+            "schema": cls._to_strict_json_schema(deepcopy(schema.model_json_schema())),
+        }
+
+    @staticmethod
+    def _should_retry_with_json_object(error: Exception) -> bool:
+        """Return whether one structured-schema error should fall back to JSON mode."""
+
+        message = str(error)
+        return "invalid_json_schema" in message or "Invalid schema for response_format" in message
+
+    @classmethod
+    def _to_strict_json_schema(
+        cls,
+        json_schema: object,
+        *,
+        path: tuple[str, ...] = (),
+        root: dict[str, object] | None = None,
+    ) -> dict[str, Any]:
+        """Normalize one Pydantic JSON Schema into OpenAI strict form.
+
+        Args:
+            json_schema: JSON Schema node to normalize.
+            path: Debug-only traversal path used in validation errors.
+            root: Root schema dictionary for resolving local ``$ref`` pointers.
+
+        Returns:
+            Strict JSON Schema node compatible with Responses structured output.
+        """
+
+        if not isinstance(json_schema, dict):
+            raise TypeError(f"Expected JSON schema dictionary at path {path!r}, got {type(json_schema).__name__}")
+
+        if root is None:
+            root = json_schema
+
+        defs = json_schema.get("$defs")
+        if isinstance(defs, dict):
+            for def_name, def_schema in defs.items():
+                cls._to_strict_json_schema(def_schema, path=(*path, "$defs", def_name), root=root)
+
+        definitions = json_schema.get("definitions")
+        if isinstance(definitions, dict):
+            for definition_name, definition_schema in definitions.items():
+                cls._to_strict_json_schema(
+                    definition_schema,
+                    path=(*path, "definitions", definition_name),
+                    root=root,
+                )
+
+        if json_schema.get("type") == "object" and "additionalProperties" not in json_schema:
+            json_schema["additionalProperties"] = False
+
+        properties = json_schema.get("properties")
+        if isinstance(properties, dict):
+            json_schema["required"] = list(properties.keys())
+            json_schema["properties"] = {
+                key: cls._to_strict_json_schema(prop_schema, path=(*path, "properties", key), root=root)
+                for key, prop_schema in properties.items()
+            }
+
+        items = json_schema.get("items")
+        if isinstance(items, dict):
+            json_schema["items"] = cls._to_strict_json_schema(items, path=(*path, "items"), root=root)
+
+        additional_properties = json_schema.get("additionalProperties")
+        if isinstance(additional_properties, dict):
+            json_schema["additionalProperties"] = cls._to_strict_json_schema(
+                additional_properties,
+                path=(*path, "additionalProperties"),
+                root=root,
+            )
+
+        any_of = json_schema.get("anyOf")
+        if isinstance(any_of, list):
+            json_schema["anyOf"] = [
+                cls._to_strict_json_schema(variant, path=(*path, "anyOf", str(index)), root=root)
+                for index, variant in enumerate(any_of)
+            ]
+
+        all_of = json_schema.get("allOf")
+        if isinstance(all_of, list):
+            if len(all_of) == 1:
+                json_schema.update(cls._to_strict_json_schema(all_of[0], path=(*path, "allOf", "0"), root=root))
+                json_schema.pop("allOf")
+            else:
+                json_schema["allOf"] = [
+                    cls._to_strict_json_schema(entry, path=(*path, "allOf", str(index)), root=root)
+                    for index, entry in enumerate(all_of)
+                ]
+
+        if json_schema.get("default", object()) is None:
+            json_schema.pop("default")
+
+        ref = json_schema.get("$ref")
+        if isinstance(ref, str) and cls._has_more_than_n_keys(json_schema, 1):
+            resolved = cls._resolve_ref(root=root, ref=ref)
+            if not isinstance(resolved, dict):
+                raise TypeError(f"Expected resolved $ref {ref!r} to be a dictionary")
+            json_schema.update({**resolved, **json_schema})
+            json_schema.pop("$ref")
+            return cls._to_strict_json_schema(json_schema, path=path, root=root)
+
+        return json_schema
+
+    @staticmethod
+    def _resolve_ref(*, root: dict[str, object], ref: str) -> object:
+        """Resolve one local JSON Schema reference against the root schema."""
+
+        if not ref.startswith("#/"):
+            raise ValueError(f"Unexpected $ref format {ref!r}; expected a local schema reference")
+
+        resolved: object = root
+        for key in ref[2:].split("/"):
+            if not isinstance(resolved, dict):
+                raise TypeError(f"Encountered non-dictionary schema node while resolving {ref!r}")
+            resolved = resolved[key]
+        return resolved
+
+    @staticmethod
+    def _has_more_than_n_keys(obj: dict[str, object], n: int) -> bool:
+        """Return whether a mapping has more than ``n`` keys."""
+
+        index = 0
+        for _ in obj:
+            index += 1
+            if index > n:
+                return True
+        return False
+
     @staticmethod
     def _usage(response: Any) -> LLMUsage:
         """Extract usage information from an OpenAI response object.
@@ -255,10 +445,10 @@ class OpenAILLMAdapter(LLMAdapter):
         schema: type[StructuredModelT],
         raw_text: str,
     ) -> StructuredModelT:
-        """Extract and validate the parsed structured output from a response.
+        """Extract and validate the structured output from a response.
 
         Args:
-            response: OpenAI parse result object.
+            response: OpenAI response object.
             schema: Target Pydantic schema for validation.
             raw_text: Extracted raw text used as a fallback parse source.
 

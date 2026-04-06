@@ -61,7 +61,14 @@ class _FakeResponsesAPI:
         """
 
         self._responses = list(responses)
+        self.create_calls: list[dict[str, Any]] = []
         self.parse_calls: list[dict[str, Any]] = []
+
+    def create(self, **kwargs: Any) -> _FakeOpenAIResponse:
+        """Return the next queued create response."""
+
+        self.create_calls.append(kwargs)
+        return self._responses.pop(0)
 
     def parse(self, **kwargs: Any) -> _FakeOpenAIResponse:
         """Return the next queued parse response.
@@ -74,6 +81,25 @@ class _FakeResponsesAPI:
         """
 
         self.parse_calls.append(kwargs)
+        return self._responses.pop(0)
+
+
+class _FailingResponsesAPI(_FakeResponsesAPI):
+    """Fake ``responses`` namespace that fails on a chosen parse call."""
+
+    def __init__(self, responses: list[_FakeOpenAIResponse], *, failure_call: int, message: str) -> None:
+        """Store queued responses plus one deterministic failing call."""
+
+        super().__init__(responses)
+        self._failure_call = failure_call
+        self._message = message
+
+    def create(self, **kwargs: Any) -> _FakeOpenAIResponse:
+        """Raise a deterministic error on the configured create call."""
+
+        self.create_calls.append(kwargs)
+        if len(self.create_calls) == self._failure_call:
+            raise RuntimeError(self._message)
         return self._responses.pop(0)
 
 
@@ -97,6 +123,53 @@ class _FakeOpenAIClient:
         )
 
 
+class _SchemaRejectingOpenAIClient:
+    """Fake OpenAI-like client that rejects strict JSON Schema once."""
+
+    def __init__(self) -> None:
+        """Return valid responses while rejecting the strict mapping schema once."""
+
+        self.responses = _FailingResponsesAPI(
+            [
+                _FakeOpenAIResponse(
+                    output_text=json.dumps(_source_schema().model_dump(mode="json"), sort_keys=True),
+                    output_parsed=_source_schema(),
+                ),
+                _FakeOpenAIResponse(
+                    output_text=json.dumps(_mapping_ir().model_dump(mode="json"), sort_keys=True),
+                    output_parsed=_mapping_ir(),
+                ),
+            ],
+            failure_call=2,
+            message=(
+                "Error code: 400 - {'error': {'message': "
+                "\"Invalid schema for response_format 'MappingIR': In context=(), "
+                "'required' is required to be supplied and to be an array including every key in properties. "
+                "Extra required key 'child_keys' supplied.\", 'code': 'invalid_json_schema'}}"
+            ),
+        )
+
+
+class _RecoverableInvalidMappingOpenAIClient:
+    """Fake client that returns a parseable but semantically sloppy MappingIR."""
+
+    def __init__(self) -> None:
+        """Queue a schema response plus one recoverably invalid mapping candidate."""
+
+        self.responses = _FakeResponsesAPI(
+            [
+                _FakeOpenAIResponse(
+                    output_text=json.dumps(_source_schema().model_dump(mode="json"), sort_keys=True),
+                    output_parsed=_source_schema(),
+                ),
+                _FakeOpenAIResponse(
+                    output_text=json.dumps(_recoverable_invalid_mapping_ir().model_dump(mode="json"), sort_keys=True),
+                    output_parsed=_recoverable_invalid_mapping_ir(),
+                ),
+            ]
+        )
+
+
 def test_from_scratch_pipeline_example_runs_offline() -> None:
     """Verify that the from-scratch example stays runnable offline."""
 
@@ -114,6 +187,7 @@ def test_from_scratch_pipeline_example_runs_offline() -> None:
     )
 
     assert summary["mapping_candidate_count"] == 1
+    assert summary["mapping_repair_applied"] is False
     assert summary["mapping_validation"]["valid"] is True
     assert summary["converted_validation"]["valid"] is True
     assert summary["drift_classification"] == "rename_compatible"
@@ -161,6 +235,72 @@ def test_from_scratch_pipeline_example_runs_offline() -> None:
         source_ref["id"] == "src_task_name" and source_ref["path"] == "taskName"
         for source_ref in patched_mapping_ir["source_refs"]
     )
+
+
+def test_from_scratch_pipeline_example_recovers_from_mapping_json_schema_rejection() -> None:
+    """Verify that the example falls back when a proxy rejects strict JSON Schema."""
+
+    module = _load_example_module()
+    output_dir = ROOT / ".pytest-local-tmp" / "from_scratch_pipeline_example_failure"
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+
+    summary = module.run_example(output_dir=output_dir, client=_SchemaRejectingOpenAIClient())
+    trace = json.loads((output_dir / "mapping_candidate_0.trace.json").read_text(encoding="utf-8"))
+
+    assert summary["mapping_validation"]["valid"] is True
+    assert summary["converted_validation"]["valid"] is True
+    assert trace["metadata"]["structured_output_mode"] == "json_object_fallback"
+    assert "invalid_json_schema" in trace["metadata"]["structured_output_fallback_reason"]
+    assert "Extra required key 'child_keys' supplied." in trace["metadata"]["structured_output_fallback_reason"]
+
+
+def test_from_scratch_pipeline_example_repairs_recoverable_mapping_references() -> None:
+    """Verify that the example repairs narrow reference-shape mistakes locally."""
+
+    module = _load_example_module()
+    output_dir = ROOT / ".pytest-local-tmp" / "from_scratch_pipeline_example_repair"
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+
+    summary = module.run_example(output_dir=output_dir, client=_RecoverableInvalidMappingOpenAIClient())
+    selection = json.loads((output_dir / "mapping_selection.json").read_text(encoding="utf-8"))
+    mapping_ir = json.loads((output_dir / "mapping_ir.json").read_text(encoding="utf-8"))
+    converted_payload = json.loads((output_dir / "converted_payload.json").read_text(encoding="utf-8"))
+
+    assert summary["mapping_repair_applied"] is True
+    assert summary["mapping_validation"]["valid"] is True
+    assert summary["converted_validation"]["valid"] is True
+    assert selection["selection_mode"] == "repaired_candidate"
+    assert selection["repair_report"]["repair_applied"] is True
+    assert any(
+        rewrite["location"] == "steps.task_obj.operation.step_refs[0]"
+        and rewrite["before"] == "task_id"
+        and rewrite["after"] == "auto_copy_src_task_id"
+        for rewrite in selection["repair_report"]["rewritten_references"]
+    )
+    assert any(
+        rewrite["location"] == "assignments.owner"
+        and rewrite["before"] == "owner"
+        and rewrite["after"] == "auto_copy_src_owner"
+        for rewrite in selection["repair_report"]["rewritten_references"]
+    )
+    assert any(
+        rewrite["location"] == "postconditions.task"
+        and rewrite["before"] == "task"
+        and rewrite["after"] == "task_obj"
+        for rewrite in selection["repair_report"]["rewritten_references"]
+    )
+    assert any(step["id"] == "auto_copy_src_task_id" for step in mapping_ir["steps"])
+    assert any(step["id"] == "auto_copy_src_owner" for step in mapping_ir["steps"])
+    assert converted_payload == {
+        "owner": "dana",
+        "task": {
+            "id": "TASK-200",
+            "name": "Ship example docs",
+            "status": "ready",
+        },
+    }
 
 
 def _load_example_module() -> ModuleType:
@@ -224,5 +364,43 @@ def _mapping_ir() -> MappingIR:
             TargetAssignment(step_id="copy_task_name", target_path="task.name"),
             TargetAssignment(step_id="copy_status", target_path="task.status"),
             TargetAssignment(step_id="copy_owner", target_path="owner"),
+        ],
+    )
+
+
+def _recoverable_invalid_mapping_ir() -> MappingIR:
+    """Build a MappingIR candidate with recoverable step/reference mistakes."""
+
+    return MappingIR(
+        source_refs=[
+            SourceReference(id="src_task_id", path="task_id", dtype="str"),
+            SourceReference(id="src_task_name", path="task_name", dtype="str"),
+            SourceReference(id="src_status", path="status", dtype="str"),
+            SourceReference(id="src_owner", path="owner", dtype="str"),
+        ],
+        steps=[
+            MappingStep(
+                id="task_obj",
+                operation=StepOperation(
+                    kind="nest",
+                    step_refs=["task_id", "task_name", "status"],
+                    child_keys={
+                        "task_id": "id",
+                        "task_name": "name",
+                        "status": "status",
+                    },
+                ),
+            ),
+        ],
+        assignments=[
+            TargetAssignment(step_id="task_obj", target_path="task"),
+            TargetAssignment(step_id="owner", target_path="owner"),
+        ],
+        postconditions=[
+            {
+                "kind": "non_null",
+                "ref": "task",
+                "description": "The assembled task object should be present.",
+            }
         ],
     )

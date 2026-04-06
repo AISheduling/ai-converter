@@ -19,6 +19,7 @@ from ai_converter.llm import (
     render_source_schema_prompt,
 )
 from ai_converter.mapping_ir import (
+    ConditionClause,
     MappingIR,
     MappingIRValidator,
     MappingStep,
@@ -184,6 +185,33 @@ def test_step_operation_strips_explicit_nest_child_keys() -> None:
         "first_name_value": "given_name",
         "last_name_value": "family_name",
     }
+
+
+def test_mapping_ir_json_schema_types_value_fields_for_strict_structured_output() -> None:
+    """Verify that JSON Schema for ``value`` fields stays explicitly typed."""
+
+    schema = MappingIR.model_json_schema()
+
+    assert schema["$defs"]["StepOperation"]["properties"]["value"] == {"$ref": "#/$defs/JsonValue", "default": None}
+    assert schema["$defs"]["ConditionClause"]["properties"]["value"] == {"$ref": "#/$defs/JsonValue", "default": None}
+    assert schema["$defs"]["JsonValue"]["anyOf"] == [
+        {"$ref": "#/$defs/JsonScalar"},
+        {"items": {"$ref": "#/$defs/JsonValue"}, "type": "array"},
+        {"additionalProperties": {"$ref": "#/$defs/JsonValue"}, "type": "object"},
+    ]
+    assert schema["$defs"]["JsonScalar"]["anyOf"] == [
+        {"type": "string"},
+        {"type": "integer"},
+        {"type": "number"},
+        {"type": "boolean"},
+        {"type": "null"},
+    ]
+
+    operation = StepOperation(kind="default", value={"fallback": ["ready", None, 3]})
+    condition = ConditionClause(ref="src_status", kind="equals", value={"expected": ["ready"]})
+
+    assert operation.value == {"fallback": ["ready", None, 3]}
+    assert condition.value == {"expected": ["ready"]}
 
 
 def test_flatten_target_paths_keeps_container_nodes_by_default() -> None:

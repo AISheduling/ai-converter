@@ -69,13 +69,15 @@ The exported `converter_package/` directory contains:
    Why: this turns the profile evidence into an explicit `SourceSchemaSpec` that later stages can validate and compare during drift detection.
 6. Run `MappingSynthesizer.synthesize_mapping(...)`.
    Why: this produces the `MappingIR` program that describes how source fields become target fields.
-7. Validate and compile the `MappingIR`.
-   Why: validation catches structural mistakes before code generation, and compilation produces a reusable `ConverterPackage` with exportable artifacts.
-8. Convert `convert_record.json` and validate the result against the target `Pydantic` model.
+7. Select the best mapping candidate and normalize narrow recoverable reference mistakes when needed.
+   Why: some live OpenAI-compatible responses can parse as `MappingIR` but still confuse source-field names, target paths, and step ids; the example repairs only those deterministic reference-shape mistakes before crossing the compile boundary.
+8. Validate and compile the `MappingIR`.
+   Why: validation catches any remaining structural mistakes before code generation, and compilation produces a reusable `ConverterPackage` with exportable artifacts.
+9. Convert `convert_record.json` and validate the result against the target `Pydantic` model.
    Why: this proves the compiled converter works on a fresh input record, not only on the synthesis inputs.
-9. Build a profile for `drift_samples/*.json`, classify the drift, and write the heuristic resolution.
+10. Build a profile for `drift_samples/*.json`, classify the drift, and write the heuristic resolution.
    Why: after the first converter exists, the next operational question is whether new source data is still compatible or needs a local patch or a full rebuild.
-10. Apply the compatible patch with `apply_converter_patch(...)` and persist the patched schema and patched `MappingIR`.
+11. Apply the compatible patch with `apply_converter_patch(...)` and persist the patched schema and patched `MappingIR`.
    Why: compatible drift is only actionable once the example shows the concrete local artifacts you would carry forward instead of regenerating the whole converter from scratch.
 
 ## Generated Artifacts
@@ -88,6 +90,7 @@ The script writes the most important intermediate artifacts so you can inspect e
 - `llm_source_schema_trace.json`
 - `source_schema.json`
 - `mapping_candidate_0.trace.json`
+- `mapping_selection.json`
 - `mapping_ir.json`
 - `mapping_validation.json`
 - `converter_package/`
@@ -105,6 +108,11 @@ The script writes the most important intermediate artifacts so you can inspect e
 ## Offline Verification
 
 Repository tests run the same example path with an injected fake OpenAI client instead of a live network call.
+
+That offline seam also covers two live-robustness cases:
+
+- strict `json_schema` rejection from an OpenAI-compatible proxy, which falls back to plain `json_object` mode and is still validated locally;
+- semantically sloppy but parseable `MappingIR` candidates, where the example rewrites only recoverable reference mistakes such as source names being used where step ids are required.
 
 Focused smoke command:
 

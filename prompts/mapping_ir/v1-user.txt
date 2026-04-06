@@ -12,5 +12,12 @@ ${target_schema_json}
 Allowed operations:
 ${allowed_operations_json}
 
+Reference rules:
+- Every source-side field used by the program must appear in source_refs.
+- assignments[].step_id must point to a step id, not a source field name or source path.
+- operation.step_refs and depends_on must point only to step ids.
+- If a target object is assembled with nest, first create or reuse explicit steps for each child value, then reference those step ids from nest.
+- postconditions[].ref must point to a source_ref id or step id, not to a target path.
+
 Required output schema:
 ${output_schema_json}
