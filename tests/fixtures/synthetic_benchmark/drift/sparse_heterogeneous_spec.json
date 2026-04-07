@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "drift_id": "sparse-heterogeneous",
+  "drift_type": "sparsity_heterogeneous",
+  "severity": "high",
+  "compatibility_class": "breaking_change",
+  "operators": [
+    {
+      "kind": "inject_sparse_objects",
+      "keep_paths": ["task_id", "status_text"],
+      "record_indexes": [0, 2]
+    }
+  ],
+  "notes": [
+    "Reduce selected task records to sparse objects so the array becomes heterogeneous by field set."
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "drift_id": "split-and-merge",
+  "drift_type": "split_merge_field",
+  "severity": "high",
+  "compatibility_class": "breaking_change",
+  "operators": [
+    {
+      "kind": "split_field",
+      "path": "task_name",
+      "new_paths": ["task_name_left", "task_name_right"],
+      "separator": " ",
+      "record_indexes": [0, 1, 2]
+    },
+    {
+      "kind": "merge_fields",
+      "paths": ["task_id", "status_text"],
+      "new_path": "task_label",
+      "separator": ":",
+      "record_indexes": [0, 1, 2]
+    }
+  ],
+  "notes": [
+    "Split task names into deterministic parts and merge task identity with status into one label."
+  ]
+}

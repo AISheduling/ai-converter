@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "drift_id": "enum-and-format",
+  "drift_type": "enum_value_format",
+  "severity": "high",
+  "compatibility_class": "breaking_change",
+  "operators": [
+    {
+      "kind": "change_enum_surface",
+      "path": "status_text",
+      "mapping": {
+        "ready": "READY_NOW",
+        "in_progress": "WORKING"
+      },
+      "record_indexes": [0, 1, 2]
+    },
+    {
+      "kind": "change_value_format",
+      "path": "duration_days",
+      "format_style": "duration_text",
+      "record_indexes": [0, 1, 2]
+    }
+  ],
+  "notes": [
+    "Rewrite enum-like status values and render numeric durations as deterministic text."
+  ]
+}
