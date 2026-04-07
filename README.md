@@ -638,23 +638,35 @@ from pathlib import Path
 
 from ai_converter.llm import FakeLLMAdapter, FakeLLMReply
 from ai_converter.synthetic_benchmark import (
-    L0TemplateSpec,
-    LLMTemplateGenerator,
-    TemplateCacheStore,
+    AcceptedTemplateCache,
+    SyntheticTemplateLLMGenerator,
     TemplateGenerationRequest,
-    sample_canonical_scenario,
 )
 
+cache_root = Path("synthetic_template_cache")
 request = TemplateGenerationRequest(
-    scenario=sample_canonical_scenario(7).scenario,
-    base_template=L0TemplateSpec(),
-    model_config={"model": "fake-template-model", "temperature": 0},
+    guidance_notes=["Add a visible source marker."],
+    llm_model_config={"model": "fake-template-model", "temperature": 0},
 )
 adapter = FakeLLMAdapter(
     structured_replies=[
         FakeLLMReply(
             parsed_payload={
                 "template": {
+                    "template_id": "llm_wrapped_template",
+                    "root_mode": "object",
+                    "records_key": "items",
+                    "wrap_task_object": True,
+                    "task_object_key": "task",
+                    "field_aliases": {
+                        "entity_id": "task_id",
+                        "name": "title",
+                        "status": "state",
+                        "duration_days": "days",
+                        "assignee": "owner",
+                        "tags": "labels",
+                    },
+                    "optional_fields": ["assignee", "tags"],
                     "extra_fields": {"source": "llm-generated"}
                 },
                 "rationale": "add a visible source marker",
@@ -662,14 +674,15 @@ adapter = FakeLLMAdapter(
         )
     ]
 )
-generator = LLMTemplateGenerator(
-    adapter,
-    cache_store=TemplateCacheStore(Path("synthetic_template_cache")),
-)
-result = generator.generate(request)
+generator = SyntheticTemplateLLMGenerator(adapter)
+result = generator.generate(request, cache_dir=cache_root)
+cache_entry = AcceptedTemplateCache().load(cache_root, result.cache_key)
+assert result.accepted_template is not None
+assert cache_entry is not None
 
-print(result.accepted)
-print(result.cache_hit)
+print(result.status)
+print(cache_entry.llm_model_config["model"])
+print(cache_entry.response_trace["artifact_kind"])
 print(result.accepted_template.extra_fields["source"])
 ```
 

@@ -35,6 +35,8 @@ Main public entry points:
 - `TemplateGenerationRequest`
 - `TemplateGenerationCandidate`
 - `AcceptedTemplateCache`
+- `AcceptedTemplateCacheEntry`
+- `TemplateGenerationResult`
 
 ## Validation Gates
 
@@ -51,19 +53,20 @@ attempt and retries only until `max_attempts` is exhausted.
 
 ## Cache Semantics
 
-Accepted templates are cached with deterministic JSON payloads containing at
-least:
+Accepted templates are cached as `AcceptedTemplateCacheEntry` JSON payloads
+containing at least:
 
 - `cache_key`
 - `prompt_hash`
-- `model_config`
+- `llm_model_config`
 - `accepted_template`
 - `validation_report`
-- optional `llm_trace_artifact`
+- optional `response_trace`
 
-When the same prompt hash, model configuration, and cache namespace are reused,
-the generator can return the cached accepted template without calling the
-adapter again.
+`TemplateGenerationResult.status` reports whether a run was `accepted`,
+`cache_hit`, or `rejected`. When the same prompt hash, `llm_model_config`
+payload, and cache namespace are reused, the generator can return the cached
+accepted template without calling the adapter again.
 
 ## Verification
 

@@ -11,7 +11,8 @@ lineage-aware drift bundle persistence.
 - `render_l1_payload(...)` continues to produce the gold target payload.
 - `render_l0_payload(...)` can now project the same scenario into multiple
   deterministic source-side shapes through template-level shape variants.
-- `LLMTemplateGenerator` can synthesize additional `L0TemplateSpec` candidates
+- `SyntheticTemplateLLMGenerator` can synthesize additional `L0TemplateSpec`
+  candidates
   through the shared `ai_converter.llm` boundary, but the generated output is
   still only a template surface layered on top of the same canonical scenario.
 - Synthetic drift mutates only `L0` bundle surfaces. It does not change the
