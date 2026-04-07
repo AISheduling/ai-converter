@@ -502,6 +502,21 @@ LLM-assisted template generation lives under
 second LLM stack. Accepted templates can be cached deterministically and
 replayed without another adapter call when the same cache key is reused.
 
+### Focused verification commands
+
+For the repo-level synthetic benchmark verification surface recorded in
+`AGENTS.md`, run:
+
+```bash
+python -m pytest tests/unit/synthetic_benchmark -q -p no:cacheprovider
+python -m pytest tests/unit/synthetic_benchmark/generators_llm -q -p no:cacheprovider
+python -m pytest tests/unit/evaluation tests/integration/converter_pipeline -q -p no:cacheprovider
+```
+
+Use [tests/README.md](tests/README.md) for the broader test matrix, fixture
+notes, and additional focused commands outside this synthetic benchmark
+workflow summary.
+
 ### Example: run the offline template generator with a fake adapter
 
 ```python
