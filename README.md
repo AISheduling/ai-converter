@@ -501,6 +501,8 @@ LLM-assisted template generation lives under
 `LLMResponse.to_trace_artifact()` export surface rather than introducing a
 second LLM stack. Accepted templates can be cached deterministically and
 replayed without another adapter call when the same cache key is reused.
+The active FR-2 prompt source of truth for this generator is
+`prompts/synthetic_benchmark_template/`.
 
 ### Focused verification commands
 

@@ -54,6 +54,20 @@ def test_prompt_builder_renders_deterministic_prompt_sections() -> None:
     assert prompt.metadata["family"] == "synthetic_benchmark_template"
 
 
+def test_repo_keeps_one_live_prompt_family_for_template_generation() -> None:
+    """Verify that only the active prompt bundle looks live in the repository."""
+
+    active_prompt_dir = ROOT / "prompts" / "synthetic_benchmark_template"
+    retired_prompt_dir = ROOT / "prompts" / "synthetic_template"
+
+    assert active_prompt_dir.is_dir()
+    assert (active_prompt_dir / "v1-system.txt").is_file()
+    assert (active_prompt_dir / "v1-user.txt").is_file()
+    assert (retired_prompt_dir / "README.md").is_file()
+    assert not (retired_prompt_dir / "v1-system.txt").exists()
+    assert not (retired_prompt_dir / "v1-user.txt").exists()
+
+
 def test_llm_template_output_is_parsed_and_validated() -> None:
     """Verify that a structured template candidate is accepted offline."""
 

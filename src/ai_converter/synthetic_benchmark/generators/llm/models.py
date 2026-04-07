@@ -16,6 +16,7 @@ from ai_converter.synthetic_benchmark.templates.common import OptionalTaskField
 
 SYNTHETIC_TEMPLATE_GENERATOR_VERSION = "1.0"
 SYNTHETIC_TEMPLATE_CACHE_VERSION = "1.0"
+# FR-2 keeps one live prompt-bundle source of truth for template generation.
 SYNTHETIC_TEMPLATE_PROMPT_FAMILY = "synthetic_benchmark_template"
 ValidationGateName = Literal["parse", "policy", "dry_run", "serialization", "diversity"]
 GenerationStatus = Literal["accepted", "cache_hit", "rejected"]

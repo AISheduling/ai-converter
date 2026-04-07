@@ -14,6 +14,9 @@ Its job is intentionally narrow:
   artifacts
 - stop after a bounded number of attempts without blocking the wider workflow
 
+The active prompt-bundle source of truth for this FR-2 surface is
+`prompts/synthetic_benchmark_template/`.
+
 It does not generate canonical scenarios, does not generate gold `L1`, and does
 not call live models in unit tests.
 
