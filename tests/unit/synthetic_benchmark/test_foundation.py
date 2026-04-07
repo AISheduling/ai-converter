@@ -115,8 +115,18 @@ def test_bundle_store_roundtrip_is_lossless() -> None:
         export = store.save(bundle, output_dir / "bundle-1")
         loaded = store.load(export.root_dir)
         manifest_payload = json.loads(export.manifest_path.read_text(encoding="utf-8"))
+        saved_files = _saved_file_names(export.root_dir)
 
         assert export.manifest_path.exists()
+        assert saved_files == {
+            "scenario.json",
+            "template.json",
+            "l0.json",
+            "l1.json",
+            "manifest.json",
+            "metadata.json",
+        }
+        assert "source_oracle.json" not in saved_files
         assert manifest_payload == bundle.manifest.model_dump(mode="json")
         assert loaded.manifest.model_dump(mode="json") == bundle.manifest.model_dump(mode="json")
         assert loaded.model_dump(mode="json") == bundle.model_dump(mode="json")
@@ -146,3 +156,9 @@ def test_metadata_contains_reproducibility_fields() -> None:
     assert metadata["generator_version"] == "1.0"
     assert metadata["config_hash"]
     assert metadata["source_template_id"] == sampled.scenario.source_template_id
+
+
+def _saved_file_names(root_dir: Path) -> set[str]:
+    """Return the persisted bundle file names under one export directory."""
+
+    return {path.name for path in root_dir.iterdir() if path.is_file()}

@@ -279,8 +279,9 @@ repo/
 - `template.json`;
 - `l0.json`;
 - `l1.json`;
-- `source_oracle.json`;
+- `manifest.json`;
 - `drift_manifest.json` (если есть);
+- `lineage.json` (если есть);
 - `metadata.json`.
 
 ---

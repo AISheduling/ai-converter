@@ -97,10 +97,22 @@ def test_lineage_links_drift_bundle_to_parent() -> None:
     try:
         export = store.save(drift_bundle, output_dir / "bundle-1-drift")
         loaded = store.load(export.root_dir)
+        saved_files = {path.name for path in export.root_dir.iterdir() if path.is_file()}
 
         assert export.manifest_path.exists()
         assert export.drift_manifest_path is not None
         assert export.lineage_path is not None
+        assert saved_files == {
+            "scenario.json",
+            "template.json",
+            "l0.json",
+            "l1.json",
+            "manifest.json",
+            "metadata.json",
+            "drift_manifest.json",
+            "lineage.json",
+        }
+        assert "source_oracle.json" not in saved_files
         assert drift_bundle.lineage is not None
         assert drift_bundle.lineage.parent_bundle_id == base_bundle.metadata.bundle_id
         assert loaded.manifest.bundle_kind == "drift"
