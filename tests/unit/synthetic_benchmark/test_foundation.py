@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 from typing import Literal
@@ -113,7 +114,11 @@ def test_bundle_store_roundtrip_is_lossless() -> None:
     try:
         export = store.save(bundle, output_dir / "bundle-1")
         loaded = store.load(export.root_dir)
+        manifest_payload = json.loads(export.manifest_path.read_text(encoding="utf-8"))
 
+        assert export.manifest_path.exists()
+        assert manifest_payload == bundle.manifest.model_dump(mode="json")
+        assert loaded.manifest.model_dump(mode="json") == bundle.manifest.model_dump(mode="json")
         assert loaded.model_dump(mode="json") == bundle.model_dump(mode="json")
     finally:
         shutil.rmtree(output_dir, ignore_errors=True)

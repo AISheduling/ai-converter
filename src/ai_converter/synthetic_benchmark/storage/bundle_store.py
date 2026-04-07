@@ -6,14 +6,18 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from ai_converter.synthetic_benchmark.drift_generation import DriftSpec, apply_drift_to_payload
 from ai_converter.synthetic_benchmark.drift_generation.models import AppliedDriftManifest
 from ai_converter.synthetic_benchmark.renderers import render_l0_payload, render_l1_payload
 from ai_converter.synthetic_benchmark.scenario import CanonicalScenario, SampledScenario
 from ai_converter.synthetic_benchmark.storage.lineage import DriftLineage, build_drift_lineage
-from ai_converter.synthetic_benchmark.storage.models import DatasetBundle, DatasetBundleMetadata
+from ai_converter.synthetic_benchmark.storage.models import (
+    DatasetBundle,
+    DatasetBundleManifest,
+    DatasetBundleMetadata,
+)
 from ai_converter.synthetic_benchmark.templates import L0TemplateSpec
 
 
@@ -26,6 +30,7 @@ class BundleStoreExport:
     template_path: Path
     l0_path: Path
     l1_path: Path
+    manifest_path: Path
     metadata_path: Path
     drift_manifest_path: Path | None = None
     lineage_path: Path | None = None
@@ -63,6 +68,7 @@ class BundleStore:
             template=template,
             l0_payload=render_l0_payload(sampled.scenario, template),
             l1_payload=render_l1_payload(sampled.scenario),
+            manifest=_build_bundle_manifest(bundle_kind="base"),
             metadata=DatasetBundleMetadata(
                 bundle_id=resolved_bundle_id,
                 dataset_id=dataset_id,
@@ -116,6 +122,11 @@ class BundleStore:
             template=base_bundle.template,
             l0_payload=drifted_l0,
             l1_payload=base_bundle.l1_payload,
+            manifest=_build_bundle_manifest(
+                bundle_kind="drift",
+                has_drift_manifest=True,
+                has_lineage=True,
+            ),
             drift_manifest=drift_manifest,
             lineage=lineage,
             metadata=DatasetBundleMetadata(
@@ -147,14 +158,21 @@ class BundleStore:
         template_path = root_dir / "template.json"
         l0_path = root_dir / "l0.json"
         l1_path = root_dir / "l1.json"
+        manifest_path = root_dir / "manifest.json"
         metadata_path = root_dir / "metadata.json"
         drift_manifest_path = root_dir / "drift_manifest.json"
         lineage_path = root_dir / "lineage.json"
+        manifest = _build_bundle_manifest(
+            bundle_kind=bundle.metadata.bundle_kind,
+            has_drift_manifest=bundle.drift_manifest is not None,
+            has_lineage=bundle.lineage is not None,
+        )
 
         _write_json(scenario_path, bundle.scenario.canonical_payload())
         _write_json(template_path, bundle.template.canonical_payload())
         _write_json(l0_path, bundle.l0_payload)
         _write_json(l1_path, bundle.l1_payload)
+        _write_json(manifest_path, manifest.canonical_payload())
         _write_json(metadata_path, bundle.metadata.canonical_payload())
         if bundle.drift_manifest is not None:
             _write_json(drift_manifest_path, bundle.drift_manifest.canonical_payload())
@@ -167,6 +185,7 @@ class BundleStore:
             template_path=template_path,
             l0_path=l0_path,
             l1_path=l1_path,
+            manifest_path=manifest_path,
             metadata_path=metadata_path,
             drift_manifest_path=drift_manifest_path if bundle.drift_manifest is not None else None,
             lineage_path=lineage_path if bundle.lineage is not None else None,
@@ -188,6 +207,7 @@ class BundleStore:
             template=L0TemplateSpec.model_validate(_read_json(directory / "template.json")),
             l0_payload=_read_json(directory / "l0.json"),
             l1_payload=_read_json(directory / "l1.json"),
+            manifest=DatasetBundleManifest.model_validate(_read_json(directory / "manifest.json")),
             drift_manifest=_load_optional_manifest(directory / "drift_manifest.json"),
             lineage=_load_optional_lineage(directory / "lineage.json"),
             metadata=DatasetBundleMetadata.model_validate(_read_json(directory / "metadata.json")),
@@ -219,6 +239,21 @@ def _read_json(path: Path) -> Any:
     """
 
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _build_bundle_manifest(
+    *,
+    bundle_kind: Literal["base", "drift"],
+    has_drift_manifest: bool = False,
+    has_lineage: bool = False,
+) -> DatasetBundleManifest:
+    """Build the deterministic artifact manifest for one persisted bundle."""
+
+    return DatasetBundleManifest(
+        bundle_kind=bundle_kind,
+        drift_manifest_path="drift_manifest.json" if has_drift_manifest else None,
+        lineage_path="lineage.json" if has_lineage else None,
+    )
 
 
 def _load_optional_manifest(path: Path) -> AppliedDriftManifest | None:

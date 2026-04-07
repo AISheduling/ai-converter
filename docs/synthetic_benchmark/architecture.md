@@ -46,6 +46,7 @@ Each base bundle keeps the deterministic foundation layout:
 |-- template.json
 |-- l0.json
 |-- l1.json
+|-- manifest.json
 `-- metadata.json
 ```
 
@@ -58,10 +59,15 @@ artifacts:
 |-- template.json
 |-- l0.json
 |-- l1.json
+|-- manifest.json
 |-- metadata.json
 |-- drift_manifest.json
 `-- lineage.json
 ```
+
+`manifest.json` is the explicit bundle-level artifact index for the persisted
+layout, while `metadata.json` keeps reproducibility and identity fields such as
+the seed, template source, generator version, and bundle kind.
 
 `lineage.json` links the drift bundle back to its parent bundle through
 `parent_bundle_id`, `drift_type`, `severity`, `operator_sequence`, and

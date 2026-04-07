@@ -44,7 +44,14 @@ from .scenario import (
     SampledScenario,
     ScenarioSamplerConfig,
 )
-from .storage import BundleStore, BundleStoreExport, DatasetBundle, DatasetBundleMetadata, DriftLineage
+from .storage import (
+    BundleStore,
+    BundleStoreExport,
+    DatasetBundle,
+    DatasetBundleManifest,
+    DatasetBundleMetadata,
+    DriftLineage,
+)
 from .templates import (
     L0TemplateSpec,
     ShapeVariantPolicy,
@@ -65,6 +72,7 @@ __all__ = [
     "ChangeEnumSurfaceOperator",
     "ChangeValueFormatOperator",
     "DatasetBundle",
+    "DatasetBundleManifest",
     "DatasetBundleMetadata",
     "DeterministicScenarioMetadata",
     "DriftLineage",

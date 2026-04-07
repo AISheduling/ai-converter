@@ -98,10 +98,14 @@ def test_lineage_links_drift_bundle_to_parent() -> None:
         export = store.save(drift_bundle, output_dir / "bundle-1-drift")
         loaded = store.load(export.root_dir)
 
+        assert export.manifest_path.exists()
         assert export.drift_manifest_path is not None
         assert export.lineage_path is not None
         assert drift_bundle.lineage is not None
         assert drift_bundle.lineage.parent_bundle_id == base_bundle.metadata.bundle_id
+        assert loaded.manifest.bundle_kind == "drift"
+        assert loaded.manifest.drift_manifest_path == "drift_manifest.json"
+        assert loaded.manifest.lineage_path == "lineage.json"
         assert loaded.model_dump(mode="json") == drift_bundle.model_dump(mode="json")
     finally:
         shutil.rmtree(output_dir, ignore_errors=True)
