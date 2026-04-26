@@ -160,6 +160,7 @@ class MappingIRValidator:
         """
 
         issues = self._validate_operation_arguments(step.operation, location=f"steps.{step.id}")
+        issues.extend(self._validate_operation_expressions(step, location=f"steps.{step.id}"))
 
         for source_ref in self._source_refs_for_operation(step.operation):
             if source_ref not in source_ids:
@@ -345,6 +346,25 @@ class MappingIRValidator:
                     location=location,
                 )
             )
+        if operation.kind == "default":
+            unsupported_arguments = []
+            if operation.expression is not None:
+                unsupported_arguments.append("expression")
+            if operation.source_refs:
+                unsupported_arguments.append("source_refs")
+            if operation.step_refs:
+                unsupported_arguments.append("step_refs")
+            if unsupported_arguments:
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_arguments",
+                        message=(
+                            "operation 'default' does not support "
+                            + ", ".join(unsupported_arguments)
+                        ),
+                        location=location,
+                    )
+                )
         if operation.kind == "validate" and not operation.predicate:
             issues.append(
                 ValidationIssue(
@@ -359,6 +379,42 @@ class MappingIRValidator:
                     code="invalid_arguments",
                     message="operation 'unnest' requires child_path",
                     location=location,
+                )
+            )
+        return issues
+
+    @staticmethod
+    def _validate_operation_expressions(
+        step: MappingStep,
+        *,
+        location: str,
+    ) -> list[ValidationIssue]:
+        """Validate operation expressions against the runtime expression contract.
+
+        Args:
+            step: Mapping step whose operation may contain an expression.
+            location: Human-readable program location for diagnostics.
+
+        Returns:
+            Structured issues found in the operation expression or predicate.
+        """
+
+        operation = step.operation
+        issues: list[ValidationIssue] = []
+        if operation.kind == "derive" and operation.expression:
+            issues.extend(
+                _validate_runtime_expression(
+                    operation.expression,
+                    allowed_names=_expression_context_names(operation),
+                    location=f"{location}.expression",
+                )
+            )
+        if operation.kind == "validate" and operation.predicate:
+            issues.extend(
+                _validate_runtime_expression(
+                    operation.predicate,
+                    allowed_names=_expression_context_names(operation) | {"value"},
+                    location=f"{location}.predicate",
                 )
             )
         return issues
@@ -577,3 +633,51 @@ def _ancestor_target_paths(path: str) -> list[str]:
 
     parts = path.split(".")
     return [".".join(parts[:index]) for index in range(1, len(parts))]
+
+
+def _expression_context_names(operation: StepOperation) -> set[str]:
+    """Return runtime variable names exposed to an expression operation.
+
+    Args:
+        operation: Operation whose references define runtime variables.
+
+    Returns:
+        Set of names available to the restricted expression evaluator.
+    """
+
+    names = set(operation.source_refs) | set(operation.step_refs)
+    if operation.source_ref is not None:
+        names.add(operation.source_ref)
+    return names
+
+
+def _validate_runtime_expression(
+    expression: str,
+    *,
+    allowed_names: set[str],
+    location: str,
+) -> list[ValidationIssue]:
+    """Convert runtime expression validation failures into MappingIR issues.
+
+    Args:
+        expression: Restricted expression string.
+        allowed_names: Runtime variable names exposed to the expression.
+        location: Program location associated with the expression field.
+
+    Returns:
+        Empty list when valid, otherwise one structured issue.
+    """
+
+    from ai_converter.compiler import runtime_ops
+
+    try:
+        runtime_ops.validate_expression(expression, allowed_names)
+    except runtime_ops.UnsafeExpressionError as exc:
+        return [
+            ValidationIssue(
+                code="invalid_expression",
+                message=str(exc),
+                location=location,
+            )
+        ]
+    return []

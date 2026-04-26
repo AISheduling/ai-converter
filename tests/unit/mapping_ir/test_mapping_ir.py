@@ -146,6 +146,118 @@ def test_mapping_ir_validator_accepts_valid_program() -> None:
     assert result.issues == []
 
 
+def test_mapping_ir_validator_rejects_default_expression_that_compiler_would_ignore() -> None:
+    """Verify that default expressions are rejected before compilation.
+
+    Returns:
+        None.
+    """
+
+    validator = MappingIRValidator()
+    result = validator.validate(_candidate_with_default_expression())
+
+    assert result.valid is False
+    issue = next(issue for issue in result.issues if issue.code == "invalid_arguments")
+    assert issue.location == "steps.default_status"
+    assert "default" in issue.message
+    assert "expression" in issue.message
+
+
+def test_mapping_ir_validator_rejects_default_runtime_refs_without_semantics() -> None:
+    """Verify default rejects reference lists that compiler would ignore.
+
+    Returns:
+        None.
+    """
+
+    validator = MappingIRValidator()
+    result = validator.validate(_candidate_with_default_runtime_refs())
+
+    assert result.valid is False
+    issue = next(issue for issue in result.issues if issue.code == "invalid_arguments")
+    assert issue.location == "steps.default_status"
+    assert "source_refs" in issue.message
+    assert "step_refs" in issue.message
+
+
+def test_mapping_ir_validator_rejects_unsupported_derive_expression_syntax() -> None:
+    """Verify that unsupported derive syntax is rejected by the validator.
+
+    Returns:
+        None.
+    """
+
+    validator = MappingIRValidator()
+    result = validator.validate(_candidate_with_unsupported_derive_expression())
+
+    assert result.valid is False
+    issue = next(issue for issue in result.issues if issue.code == "invalid_expression")
+    assert issue.location == "steps.derive_status.expression"
+    assert "invalid expression syntax" in issue.message
+
+
+def test_mapping_ir_validator_rejects_unknown_derive_function() -> None:
+    """Verify that unknown derive helper functions are rejected by name.
+
+    Returns:
+        None.
+    """
+
+    validator = MappingIRValidator()
+    result = validator.validate(_candidate_with_unknown_derive_function())
+
+    assert result.valid is False
+    issue = next(issue for issue in result.issues if issue.code == "invalid_expression")
+    assert issue.location == "steps.derive_status.expression"
+    assert "first_non_null" in issue.message
+
+
+def test_mapping_ir_validator_rejects_unknown_derive_expression_name() -> None:
+    """Verify that derive expressions cannot reference undeclared names.
+
+    Returns:
+        None.
+    """
+
+    validator = MappingIRValidator()
+    result = validator.validate(_candidate_with_unknown_derive_expression_name())
+
+    assert result.valid is False
+    issue = next(issue for issue in result.issues if issue.code == "invalid_expression")
+    assert issue.location == "steps.derive_status.expression"
+    assert "missing_status" in issue.message
+
+
+def test_mapping_ir_validator_rejects_unknown_validate_predicate_name() -> None:
+    """Verify that validate predicates cannot reference undeclared names.
+
+    Returns:
+        None.
+    """
+
+    validator = MappingIRValidator()
+    result = validator.validate(_candidate_with_unknown_validate_predicate_name())
+
+    assert result.valid is False
+    issue = next(issue for issue in result.issues if issue.code == "invalid_expression")
+    assert issue.location == "steps.validate_status.predicate"
+    assert "missing_status" in issue.message
+
+
+def test_mapping_ir_validator_accepts_valid_executable_expressions() -> None:
+    """Verify that declared refs and allowlisted builtins remain valid.
+
+    Returns:
+        None.
+    """
+
+    validator = MappingIRValidator()
+    result = validator.validate(_candidate_with_valid_executable_expressions())
+
+    assert result.valid is True
+    assert result.issues == []
+
+
 def test_mapping_ir_validator_rejects_nest_without_explicit_child_keys() -> None:
     """Verify that ``nest`` no longer infers semantic keys from step ids.
 
@@ -655,6 +767,188 @@ def _candidate_with_hierarchical_conflict() -> MappingIR:
         assignments=[
             TargetAssignment(step_id="copy_task_payload", target_path="task"),
             TargetAssignment(step_id="copy_task_id", target_path="task.id"),
+        ],
+    )
+
+
+def _candidate_with_default_expression() -> MappingIR:
+    """Build a candidate whose default expression would be ignored by compiler.
+
+    Returns:
+        Invalid MappingIR program with unsupported ``default`` arguments.
+    """
+
+    return MappingIR(
+        source_refs=[SourceReference(id="src_status", path="status_text", dtype="str")],
+        steps=[
+            MappingStep(
+                id="default_status",
+                operation=StepOperation(
+                    kind="default",
+                    source_ref="src_status",
+                    expression="coalesce($0)",
+                    value=None,
+                ),
+            )
+        ],
+        assignments=[TargetAssignment(step_id="default_status", target_path="status")],
+    )
+
+
+def _candidate_with_default_runtime_refs() -> MappingIR:
+    """Build a candidate whose default reference lists would be ignored.
+
+    Returns:
+        Invalid MappingIR program with unsupported ``default`` references.
+    """
+
+    return MappingIR(
+        source_refs=[SourceReference(id="src_status", path="status_text", dtype="str")],
+        steps=[
+            MappingStep(
+                id="copy_status",
+                operation=StepOperation(kind="copy", source_ref="src_status"),
+            ),
+            MappingStep(
+                id="default_status",
+                operation=StepOperation(
+                    kind="default",
+                    source_refs=["src_status"],
+                    step_refs=["copy_status"],
+                    value="unknown",
+                ),
+            ),
+        ],
+        assignments=[TargetAssignment(step_id="default_status", target_path="status")],
+    )
+
+
+def _candidate_with_unsupported_derive_expression() -> MappingIR:
+    """Build a candidate with unsupported non-Python derive syntax.
+
+    Returns:
+        Invalid MappingIR program with an unsupported derive expression.
+    """
+
+    return MappingIR(
+        source_refs=[SourceReference(id="src_status", path="status_text", dtype="str")],
+        steps=[
+            MappingStep(
+                id="derive_status",
+                operation=StepOperation(
+                    kind="derive",
+                    source_refs=["src_status"],
+                    expression="src_status != null && len(src_status) > 0",
+                ),
+            )
+        ],
+        assignments=[TargetAssignment(step_id="derive_status", target_path="status")],
+    )
+
+
+def _candidate_with_unknown_derive_function() -> MappingIR:
+    """Build a candidate whose derive expression uses an unknown function.
+
+    Returns:
+        Invalid MappingIR program with an unknown derive function.
+    """
+
+    return MappingIR(
+        source_refs=[SourceReference(id="src_status", path="status_text", dtype="str")],
+        steps=[
+            MappingStep(
+                id="derive_status",
+                operation=StepOperation(
+                    kind="derive",
+                    source_refs=["src_status"],
+                    expression="first_non_null(src_status)",
+                ),
+            )
+        ],
+        assignments=[TargetAssignment(step_id="derive_status", target_path="status")],
+    )
+
+
+def _candidate_with_unknown_derive_expression_name() -> MappingIR:
+    """Build a candidate whose derive expression uses an undeclared name.
+
+    Returns:
+        Invalid MappingIR program with an unknown expression name.
+    """
+
+    return MappingIR(
+        source_refs=[SourceReference(id="src_status", path="status_text", dtype="str")],
+        steps=[
+            MappingStep(
+                id="derive_status",
+                operation=StepOperation(
+                    kind="derive",
+                    source_refs=["src_status"],
+                    expression="src_status + missing_status",
+                ),
+            )
+        ],
+        assignments=[TargetAssignment(step_id="derive_status", target_path="status")],
+    )
+
+
+def _candidate_with_unknown_validate_predicate_name() -> MappingIR:
+    """Build a candidate whose validate predicate uses an undeclared name.
+
+    Returns:
+        Invalid MappingIR program with an unknown predicate name.
+    """
+
+    return MappingIR(
+        source_refs=[SourceReference(id="src_status", path="status_text", dtype="str")],
+        steps=[
+            MappingStep(
+                id="validate_status",
+                operation=StepOperation(
+                    kind="validate",
+                    source_ref="src_status",
+                    predicate="value == missing_status",
+                ),
+            )
+        ],
+        assignments=[TargetAssignment(step_id="validate_status", target_path="status")],
+    )
+
+
+def _candidate_with_valid_executable_expressions() -> MappingIR:
+    """Build a valid candidate with executable derive and validate expressions.
+
+    Returns:
+        Valid MappingIR program with declared expression names.
+    """
+
+    return MappingIR(
+        source_refs=[
+            SourceReference(id="src_task_name", path="task_name", dtype="str"),
+            SourceReference(id="src_status", path="status_text", dtype="str"),
+        ],
+        steps=[
+            MappingStep(
+                id="derive_summary",
+                operation=StepOperation(
+                    kind="derive",
+                    source_refs=["src_task_name", "src_status"],
+                    expression="src_task_name + ':' + str(src_status)",
+                ),
+            ),
+            MappingStep(
+                id="validate_summary",
+                operation=StepOperation(
+                    kind="validate",
+                    source_ref="src_status",
+                    step_refs=["derive_summary"],
+                    predicate="value != None and len(derive_summary) > 0",
+                ),
+            ),
+        ],
+        assignments=[
+            TargetAssignment(step_id="derive_summary", target_path="task.name"),
+            TargetAssignment(step_id="validate_summary", target_path="status"),
         ],
     )
 
