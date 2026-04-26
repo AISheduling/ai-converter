@@ -209,7 +209,21 @@ def test_mapping_ir_validator_rejects_unknown_derive_function() -> None:
     assert result.valid is False
     issue = next(issue for issue in result.issues if issue.code == "invalid_expression")
     assert issue.location == "steps.derive_status.expression"
-    assert "first_non_null" in issue.message
+    assert "pick_first" in issue.message
+
+
+def test_mapping_ir_validator_accepts_first_non_null_derive_function() -> None:
+    """Verify that the supported fallback helper is valid MappingIR.
+
+    Returns:
+        None.
+    """
+
+    validator = MappingIRValidator()
+    result = validator.validate(_candidate_with_first_non_null_derive_function())
+
+    assert result.valid is True
+    assert result.issues == []
 
 
 def test_mapping_ir_validator_rejects_unknown_derive_expression_name() -> None:
@@ -256,6 +270,21 @@ def test_mapping_ir_validator_accepts_valid_executable_expressions() -> None:
 
     assert result.valid is True
     assert result.issues == []
+
+
+def test_mapping_ir_prompts_document_supported_fallback_expression() -> None:
+    """Verify prompts document the deterministic fallback helper contract.
+
+    Returns:
+        None.
+    """
+
+    system_prompt = (ROOT / "prompts" / "mapping_ir" / "v1-system.txt").read_text(encoding="utf-8")
+    user_prompt = (ROOT / "prompts" / "mapping_ir" / "v1-user.txt").read_text(encoding="utf-8")
+
+    assert "first_non_null" in system_prompt
+    assert "first_non_null" in user_prompt
+    assert "first_non_null(src_status, src_status_label, src_status_nested)" in system_prompt
 
 
 def test_mapping_ir_validator_rejects_nest_without_explicit_child_keys() -> None:
@@ -861,7 +890,34 @@ def _candidate_with_unknown_derive_function() -> MappingIR:
                 operation=StepOperation(
                     kind="derive",
                     source_refs=["src_status"],
-                    expression="first_non_null(src_status)",
+                    expression="pick_first(src_status)",
+                ),
+            )
+        ],
+        assignments=[TargetAssignment(step_id="derive_status", target_path="status")],
+    )
+
+
+def _candidate_with_first_non_null_derive_function() -> MappingIR:
+    """Build a candidate whose derive expression uses the fallback helper.
+
+    Returns:
+        Valid MappingIR program with supported fallback expression syntax.
+    """
+
+    return MappingIR(
+        source_refs=[
+            SourceReference(id="src_status", path="status_text", dtype="str"),
+            SourceReference(id="src_status_label", path="status_text_label", dtype="str"),
+            SourceReference(id="src_status_nested", path="status.details", dtype="str"),
+        ],
+        steps=[
+            MappingStep(
+                id="derive_status",
+                operation=StepOperation(
+                    kind="derive",
+                    source_refs=["src_status", "src_status_label", "src_status_nested"],
+                    expression="first_non_null(src_status, src_status_label, src_status_nested)",
                 ),
             )
         ],

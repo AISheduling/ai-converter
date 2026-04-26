@@ -262,6 +262,24 @@ def default_value(value: Any, default: Any) -> Any:
     return copy.deepcopy(value)
 
 
+def first_non_null(*values: Any) -> Any:
+    """Return the first runtime value that is not considered missing.
+
+    Args:
+        values: Candidate runtime values in fallback order.
+
+    Returns:
+        A defensive copy of the first present value, or ``None`` when every
+        candidate is missing.
+    """
+
+    for value in values:
+        if value is None or value == "" or value == []:
+            continue
+        return copy.deepcopy(value)
+    return None
+
+
 def drop_value() -> Any:
     """Return the runtime drop sentinel used to skip target assignments.
 
@@ -452,6 +470,7 @@ class _SafeExpressionEvaluator(ast.NodeVisitor):
     }
     _allowed_functions = {
         "bool": bool,
+        "first_non_null": first_non_null,
         "float": float,
         "int": int,
         "len": len,

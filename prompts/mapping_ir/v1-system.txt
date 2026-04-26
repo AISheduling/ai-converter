@@ -12,3 +12,7 @@ Respect MappingIR reference spaces strictly:
 - if you want to place a source field into a nest or assignment, first create an explicit step for it, usually a copy step;
 - postconditions must reference a source_ref id or step id, never a target path like task;
 - for nest operations, child_keys keys must exactly match the declared step_refs.
+For fallback derive expressions, use the supported Python-like helper `first_non_null`.
+It treats None, empty strings, and empty lists as missing.
+Example: `first_non_null(src_status, src_status_label, src_status_nested)`.
+Do not invent helpers such as `coalesce`, `pick_first`, or JavaScript-style `??`.

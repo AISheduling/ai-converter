@@ -13,6 +13,7 @@ from ai_converter.compiler.runtime_ops import (
     UnsafeExpressionError,
     cast_value,
     derive_value,
+    evaluate_expression,
     map_enum_value,
     unit_convert_value,
 )
@@ -200,6 +201,45 @@ def test_runtime_unit_convert() -> None:
     assert unit_convert_value([1, 2], 60, from_unit="hours", to_unit="minutes") == [60, 120]
 
 
+def test_runtime_expression_first_non_null_returns_first_present_value() -> None:
+    """Verify that fallback expressions skip missing runtime values.
+
+    Returns:
+        None.
+    """
+
+    assert (
+        evaluate_expression(
+            "first_non_null(src_a, src_b, src_c)",
+            {"src_a": None, "src_b": "", "src_c": "done"},
+        )
+        == "done"
+    )
+    assert (
+        evaluate_expression(
+            "first_non_null(src_a, src_b, src_c)",
+            {"src_a": [], "src_b": "renamed", "src_c": "nested"},
+        )
+        == "renamed"
+    )
+
+
+def test_runtime_expression_first_non_null_returns_none_when_all_values_missing() -> None:
+    """Verify that fallback expressions return ``None`` with no present values.
+
+    Returns:
+        None.
+    """
+
+    assert (
+        evaluate_expression(
+            "first_non_null(src_a, src_b, src_c)",
+            {"src_a": None, "src_b": "", "src_c": []},
+        )
+        is None
+    )
+
+
 def test_safe_derive_rejects_disallowed_expressions() -> None:
     """Verify that unsafe derive expressions are rejected without ``eval``.
 
@@ -209,6 +249,34 @@ def test_safe_derive_rejects_disallowed_expressions() -> None:
 
     with pytest.raises(UnsafeExpressionError):
         derive_value("__import__('os').system('calc')", {"value": 1})
+
+
+def test_safe_derive_rejects_unknown_fallback_helpers() -> None:
+    """Verify that unsupported helper names remain rejected.
+
+    Returns:
+        None.
+    """
+
+    with pytest.raises(UnsafeExpressionError):
+        derive_value("pick_first(src_status)", {"src_status": "done"})
+
+
+def test_compiled_converter_derives_status_from_fallback_surfaces() -> None:
+    """Verify compiled fallback status mapping across base, rename, and nesting.
+
+    Returns:
+        None.
+    """
+
+    converter = compile_mapping_ir(
+        _status_fallback_program(),
+        module_name="compiled_status_fallback",
+    )
+
+    assert converter.convert({"status_text": "base"}) == {"status": "base"}
+    assert converter.convert({"status_text_label": "renamed"}) == {"status": "renamed"}
+    assert converter.convert({"status": {"details": "nested"}}) == {"status": "nested"}
 
 
 def _program() -> MappingIR:
@@ -273,6 +341,33 @@ def _program() -> MappingIR:
             TargetAssignment(step_id="owner_email", target_path="metadata.owner_email"),
             TargetAssignment(step_id="summary", target_path="metadata.summary"),
         ],
+    )
+
+
+def _status_fallback_program() -> MappingIR:
+    """Build a program that derives status from multiple drift surfaces.
+
+    Returns:
+        Valid MappingIR program using the supported fallback helper.
+    """
+
+    return MappingIR(
+        source_refs=[
+            SourceReference(id="src_status", path="status_text", dtype="str"),
+            SourceReference(id="src_status_label", path="status_text_label", dtype="str"),
+            SourceReference(id="src_status_nested", path="status.details", dtype="str"),
+        ],
+        steps=[
+            MappingStep(
+                id="derive_status",
+                operation=StepOperation(
+                    kind="derive",
+                    source_refs=["src_status", "src_status_label", "src_status_nested"],
+                    expression="first_non_null(src_status, src_status_label, src_status_nested)",
+                ),
+            )
+        ],
+        assignments=[TargetAssignment(step_id="derive_status", target_path="status")],
     )
 
 
