@@ -215,3 +215,6 @@ __marimo__/
 .ai
 examples/from_scratch_pipeline/generated/*
 !examples/from_scratch_pipeline/generated/.gitkeep
+examples/synthetic_benchmark/generated/*
+!examples/synthetic_benchmark/generated/.gitkeep
+

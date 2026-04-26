@@ -144,6 +144,7 @@ def render_mapping_ir_prompt(
         A file-backed prompt envelope for mapping synthesis.
     """
 
+    normalized_hint = conversion_hint or "unspecified"
     return load_prompt_bundle("mapping_ir", version=version).render(
         "mapping_ir_synthesis",
         sections={
@@ -151,9 +152,13 @@ def render_mapping_ir_prompt(
             "target_schema_json": _json_text(target_schema),
             "output_schema_json": _json_text(MappingIR.model_json_schema()),
             "allowed_operations_json": _json_text(list(SUPPORTED_OPERATION_KINDS)),
-            "conversion_hint": conversion_hint or "unspecified",
+            "conversion_hint": normalized_hint,
         },
-        metadata={"conversion_hint": conversion_hint},
+        metadata={
+            "conversion_hint_present": conversion_hint is not None,
+            "conversion_hint_length": len(normalized_hint),
+            "conversion_hint_preview": _metadata_preview(normalized_hint),
+        },
     )
 
 
@@ -212,6 +217,15 @@ def _json_text(value: Any) -> str:
     else:
         payload = value
     return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+def _metadata_preview(value: str, *, max_length: int = 240) -> str:
+    """Return a short metadata-safe preview while preserving full prompt text."""
+
+    normalized = " ".join(value.split())
+    if len(normalized) <= max_length:
+        return normalized
+    return normalized[: max_length - 3] + "..."
 
 
 def _diff_text(expected: Any, actual: Any) -> str:

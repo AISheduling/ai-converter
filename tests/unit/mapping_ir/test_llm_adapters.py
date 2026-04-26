@@ -129,6 +129,28 @@ class _SchemaRejectingOpenAIClient:
         self.responses = _SchemaRejectingResponsesAPI()
 
 
+class _MappingIRCompatibleResponsesAPI(_FakeResponsesAPI):
+    """Fake responses API that returns a minimal valid ``MappingIR`` payload."""
+
+    def create(self, **kwargs):
+        """Record one call and return a valid ``MappingIR`` JSON payload."""
+
+        self.create_calls.append(kwargs)
+        return _FakeOpenAIResponse(
+            output_text=(
+                '{"version":"1.0","source_refs":[],"steps":[],'
+                '"assignments":[],"preconditions":[],"postconditions":[]}'
+            )
+        )
+
+
+class _MappingIRCompatibleOpenAIClient:
+    """Fake client used to inspect the chosen structured-output mode for ``MappingIR``."""
+
+    def __init__(self) -> None:
+        self.responses = _MappingIRCompatibleResponsesAPI()
+
+
 def test_openai_adapter_generate_text_uses_responses_create() -> None:
     """Verify that ``OpenAILLMAdapter`` uses ``responses.create`` for text.
 
@@ -229,6 +251,28 @@ def test_openai_adapter_falls_back_to_json_object_when_provider_rejects_json_sch
     assert [call["text"]["format"]["type"] for call in client.responses.create_calls] == ["json_schema", "json_object"]
     assert response.metadata["structured_output_mode"] == "json_object_fallback"
     assert "invalid_json_schema" in response.metadata["structured_output_fallback_reason"]
+
+
+def test_openai_adapter_uses_json_object_upfront_for_mapping_ir_proxy_compatibility() -> None:
+    """Verify that ``MappingIR`` skips the known-incompatible strict schema mode."""
+
+    client = _MappingIRCompatibleOpenAIClient()
+    adapter = OpenAILLMAdapter(client=client, model="gpt-5.4-mini")
+
+    response = adapter.generate_structured(_prompt(), schema=MappingIR, metadata={"scenario": "mapping_ir"})
+
+    assert response.ok is True
+    assert response.parsed == MappingIR(
+        version="1.0",
+        source_refs=[],
+        steps=[],
+        assignments=[],
+        preconditions=[],
+        postconditions=[],
+    )
+    assert [call["text"]["format"]["type"] for call in client.responses.create_calls] == ["json_object"]
+    assert response.metadata["structured_output_mode"] == "json_object_proactive"
+    assert "proxy_compatibility" in response.metadata["structured_output_fallback_reason"]
 
 
 def _prompt() -> PromptEnvelope:

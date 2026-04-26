@@ -147,12 +147,30 @@ class OpenAILLMAdapter(LLMAdapter):
         """
 
         request_metadata = self._request_metadata(metadata) or None
+        text_format = self._text_format(schema)
+        if self._should_use_json_object_proactively(text_format["schema"]):
+            return (
+                self._client_instance().responses.create(
+                    model=self._model,
+                    input=self._input_items(prompt),
+                    text={"format": {"type": "json_object"}},
+                    metadata=request_metadata,
+                ),
+                {
+                    **metadata,
+                    "structured_output_mode": "json_object_proactive",
+                    "structured_output_fallback_reason": (
+                        "proxy_compatibility: strict json_schema skipped because schema contains "
+                        "open-ended object fields via additionalProperties"
+                    ),
+                },
+            )
         try:
             return (
                 self._client_instance().responses.create(
                     model=self._model,
                     input=self._input_items(prompt),
-                    text={"format": self._text_format(schema)},
+                    text={"format": text_format},
                     metadata=request_metadata,
                 ),
                 {**metadata, "structured_output_mode": "json_schema_strict"},
@@ -267,6 +285,18 @@ class OpenAILLMAdapter(LLMAdapter):
 
         message = str(error)
         return "invalid_json_schema" in message or "Invalid schema for response_format" in message
+
+    @classmethod
+    def _should_use_json_object_proactively(cls, json_schema: object) -> bool:
+        """Return whether one schema should skip strict mode for proxy compatibility."""
+
+        if isinstance(json_schema, dict):
+            if "additionalProperties" in json_schema and json_schema["additionalProperties"] is not False:
+                return True
+            return any(cls._should_use_json_object_proactively(value) for value in json_schema.values())
+        if isinstance(json_schema, list):
+            return any(cls._should_use_json_object_proactively(value) for value in json_schema)
+        return False
 
     @classmethod
     def _to_strict_json_schema(

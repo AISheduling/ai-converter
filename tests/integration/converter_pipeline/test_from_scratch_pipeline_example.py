@@ -98,7 +98,8 @@ class _FailingResponsesAPI(_FakeResponsesAPI):
         """Raise a deterministic error on the configured create call."""
 
         self.create_calls.append(kwargs)
-        if len(self.create_calls) == self._failure_call:
+        format_payload = kwargs.get("text", {}).get("format", {})
+        if len(self.create_calls) == self._failure_call and format_payload.get("type") == "json_schema":
             raise RuntimeError(self._message)
         return self._responses.pop(0)
 
@@ -124,10 +125,10 @@ class _FakeOpenAIClient:
 
 
 class _SchemaRejectingOpenAIClient:
-    """Fake OpenAI-like client that rejects strict JSON Schema once."""
+    """Fake OpenAI-like client that would reject strict JSON Schema once."""
 
     def __init__(self) -> None:
-        """Return valid responses while rejecting the strict mapping schema once."""
+        """Return valid responses while rejecting the strict mapping schema if sent."""
 
         self.responses = _FailingResponsesAPI(
             [
@@ -237,8 +238,8 @@ def test_from_scratch_pipeline_example_runs_offline() -> None:
     )
 
 
-def test_from_scratch_pipeline_example_recovers_from_mapping_json_schema_rejection() -> None:
-    """Verify that the example falls back when a proxy rejects strict JSON Schema."""
+def test_from_scratch_pipeline_example_uses_proactive_json_mode_for_mapping_ir_proxy_compatibility() -> None:
+    """Verify that the example skips the known-incompatible strict mapping schema mode."""
 
     module = _load_example_module()
     output_dir = ROOT / ".pytest-local-tmp" / "from_scratch_pipeline_example_failure"
@@ -250,9 +251,8 @@ def test_from_scratch_pipeline_example_recovers_from_mapping_json_schema_rejecti
 
     assert summary["mapping_validation"]["valid"] is True
     assert summary["converted_validation"]["valid"] is True
-    assert trace["metadata"]["structured_output_mode"] == "json_object_fallback"
-    assert "invalid_json_schema" in trace["metadata"]["structured_output_fallback_reason"]
-    assert "Extra required key 'child_keys' supplied." in trace["metadata"]["structured_output_fallback_reason"]
+    assert trace["metadata"]["structured_output_mode"] == "json_object_proactive"
+    assert "proxy_compatibility" in trace["metadata"]["structured_output_fallback_reason"]
 
 
 def test_from_scratch_pipeline_example_repairs_recoverable_mapping_references() -> None:

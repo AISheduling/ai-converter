@@ -264,6 +264,26 @@ def test_prompt_renderer_includes_required_sections() -> None:
     assert "Target schema" in mapping_prompt.user_prompt
 
 
+def test_mapping_prompt_keeps_long_conversion_hint_out_of_metadata() -> None:
+    """Verify long conversion hints stay in the prompt body, not API metadata."""
+
+    long_hint = "Observed source path hints:\n" + "\n".join(
+        f"- source.path.{index}: value evidence for mapping"
+        for index in range(80)
+    )
+
+    prompt = render_mapping_ir_prompt(
+        _source_schema(),
+        _target_schema(),
+        conversion_hint=long_hint,
+    )
+
+    assert long_hint in prompt.user_prompt
+    assert prompt.metadata["conversion_hint_length"] == len(long_hint)
+    assert "conversion_hint" not in prompt.metadata
+    assert all(len(str(value)) <= 512 for value in prompt.metadata.values())
+
+
 def test_synthesizer_ranks_candidates_by_validity_and_coverage() -> None:
     """Verify that ranking prefers valid, higher-coverage mapping candidates.
 
