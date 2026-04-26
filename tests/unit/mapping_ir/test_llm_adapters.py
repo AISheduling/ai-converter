@@ -5,16 +5,36 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from ai_converter.llm import OpenAILLMAdapter, PromptEnvelope, PromptTemplateReference
+from ai_converter.llm import (
+    OpenAILLMAdapter,
+    PromptEnvelope,
+    PromptTemplateReference,
+    render_mapping_ir_prompt,
+    render_source_schema_prompt,
+)
 from ai_converter.mapping_ir import MappingIR
+from ai_converter.profiling import build_profile_report
+from ai_converter.profiling.loaders import LoadedInput
+from ai_converter.schema import SourceFieldSpec, SourceSchemaSpec, build_target_schema_card
 
 
 class DemoStructuredPayload(BaseModel):
     """Simple structured payload used by adapter tests."""
 
     message: str
+
+
+class SyntheticTaskPromptTarget(BaseModel):
+    """Synthetic benchmark target shape used by prompt guidance tests."""
+
+    id: str
+    name: str
+    status: str
+    duration_days: int
+    assignee: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -275,6 +295,48 @@ def test_openai_adapter_uses_json_object_upfront_for_mapping_ir_proxy_compatibil
     assert "proxy_compatibility" in response.metadata["structured_output_fallback_reason"]
 
 
+def test_rendered_prompts_include_mapping_grammar_and_required_semantic_paths() -> None:
+    """Verify synthetic prompts expose grammar and completed semantic surfaces offline."""
+
+    required_paths = {
+        "id": ["task_id"],
+        "name": ["task_name"],
+        "status": ["status_text", "status_text_label", "status.details"],
+        "duration_days": ["duration_days"],
+        "tags": ["tags"],
+        "assignee": ["assignee"],
+    }
+    mapping_prompt = render_mapping_ir_prompt(
+        _synthetic_source_schema(),
+        build_target_schema_card(SyntheticTaskPromptTarget),
+        conversion_hint="Map synthetic task rows.",
+        required_semantic_paths=required_paths,
+    )
+    source_prompt = render_source_schema_prompt(
+        _synthetic_profile_report(),
+        budget=900,
+        mode="compact",
+        format_hint="synthetic task row json examples",
+        required_semantic_paths=required_paths,
+    )
+    combined_mapping = f"{mapping_prompt.system_prompt}\n{mapping_prompt.user_prompt}"
+
+    assert "first_non_null(src_status, src_status_label, src_status_nested)" in combined_mapping
+    assert "Do not use `null`; use `None`" in combined_mapping
+    assert "Do not use `&&` or `||`; use `and` or `or`" in combined_mapping
+    assert "Do not use `$0`" in combined_mapping
+    assert "Do not use `if ... then ...`" in combined_mapping
+    assert "Do not use JavaScript ternary syntax `condition ? a : b`" in combined_mapping
+    assert "Do not use unsupported fallback helpers such as `coalesce`" in combined_mapping
+    assert "Required semantic source paths after schema completion" in mapping_prompt.user_prompt
+    assert "- status: status_text, status_text_label, status.details" in mapping_prompt.user_prompt
+    assert "- assignee: assignee" in mapping_prompt.user_prompt
+    assert "Required semantic evidence paths" in source_prompt.user_prompt
+    assert "- assignee: assignee" in source_prompt.user_prompt
+    assert all("sk-" not in str(value) for value in mapping_prompt.metadata.values())
+    assert all(len(str(value)) <= 512 for value in mapping_prompt.metadata.values())
+
+
 def _prompt() -> PromptEnvelope:
     """Build a deterministic prompt envelope used by adapter tests.
 
@@ -289,4 +351,63 @@ def _prompt() -> PromptEnvelope:
         user_prompt="User payload",
         reference=PromptTemplateReference("mapping_ir", "v1", "system.txt", "user.txt"),
         metadata={"family": "mapping_ir"},
+    )
+
+
+def _synthetic_source_schema() -> SourceSchemaSpec:
+    """Build a completed synthetic source schema for prompt tests."""
+
+    return SourceSchemaSpec(
+        source_name="synthetic_task_rows.json",
+        source_format="json",
+        root_type="rows",
+        fields=[
+            SourceFieldSpec(path="task_id", semantic_name="id", dtype="str"),
+            SourceFieldSpec(path="task_name", semantic_name="name", dtype="str"),
+            SourceFieldSpec(path="status_text", semantic_name="status", dtype="str"),
+            SourceFieldSpec(path="status_text_label", semantic_name="status_label", dtype="str"),
+            SourceFieldSpec(path="status.details", semantic_name="status_nested", dtype="str"),
+            SourceFieldSpec(path="duration_days", semantic_name="duration_days", dtype="int"),
+            SourceFieldSpec(path="assignee", semantic_name="assignee", dtype="str"),
+            SourceFieldSpec(path="tags", semantic_name="tags", dtype="list", cardinality="many"),
+        ],
+    )
+
+
+def _synthetic_profile_report():
+    """Build deterministic synthetic profiling evidence for source prompt tests."""
+
+    return build_profile_report(
+        LoadedInput(
+            kind="json",
+            path=None,
+            root_type="rows",
+            records=[
+                {
+                    "task_id": "TASK-1",
+                    "task_name": "Base",
+                    "status_text": "todo",
+                    "duration_days": 3,
+                    "assignee": "Ada",
+                    "tags": ["base"],
+                },
+                {
+                    "task_id": "TASK-2",
+                    "task_name": "Rename",
+                    "status_text_label": "doing",
+                    "duration_days": 5,
+                    "assignee": "Grace",
+                    "tags": ["rename"],
+                },
+                {
+                    "task_id": "TASK-3",
+                    "task_name": "Nested",
+                    "status": {"details": "blocked"},
+                    "duration_days": 8,
+                    "assignee": None,
+                    "tags": ["nested"],
+                },
+            ],
+        ),
+        sample_limit=3,
     )

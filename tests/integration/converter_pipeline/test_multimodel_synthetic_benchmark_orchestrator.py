@@ -225,11 +225,29 @@ def test_orchestrator_completes_omitted_schema_fields_and_reports_preflight() ->
         for call in first_client.responses.create_calls
         if call.get("metadata", {}).get("stage") == "mapping"
     ]
+    schema_prompts = [
+        call["input"][1]["content"]
+        for call in first_client.responses.create_calls
+        if call.get("metadata", {}).get("stage") == "schema"
+    ]
+    assert any("Required semantic evidence paths" in prompt for prompt in schema_prompts)
+    assert any("- assignee: assignee" in prompt for prompt in schema_prompts)
     assert any("Observed source path hints" in prompt for prompt in mapping_prompts)
     assert any("status_text_label" in prompt for prompt in mapping_prompts)
+    assert any(
+        "Required semantic source paths after schema completion" in prompt
+        for prompt in mapping_prompts
+    )
+    assert any("- assignee: assignee" in prompt or "- assignee: task.owner" in prompt for prompt in mapping_prompts)
+    assert any("Do not use `null`; use `None`" in prompt for prompt in mapping_prompts)
+    assert any(
+        "Do not use JavaScript ternary syntax `condition ? a : b`" in prompt
+        for prompt in mapping_prompts
+    )
     for call in first_client.responses.create_calls:
         for value in (call.get("metadata") or {}).values():
             assert len(str(value)) <= 512
+            assert "sk-" not in str(value)
 
 
 def test_select_mapping_candidate_smoke_ranks_runtime_failures() -> None:

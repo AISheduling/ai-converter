@@ -3,6 +3,9 @@ MAPPING IR SYNTHESIS
 Conversion hint:
 ${conversion_hint}
 
+Required semantic source paths after schema completion:
+${required_semantic_paths}
+
 Source schema:
 ${source_schema_json}
 
@@ -19,6 +22,13 @@ Reference rules:
 - If a target object is assembled with nest, first create or reuse explicit steps for each child value, then reference those step ids from nest.
 - postconditions[].ref must point to a source_ref id or step id, not to a target path.
 - For fallback derive expressions, use `first_non_null(...)` with declared source_ref or step ids only.
+- Use expression grammar `a if condition else b`, `None`, and `and`/`or`.
+- Do not use `null`; use `None`.
+- Do not use `&&` or `||`; use `and` or `or`.
+- Do not use `$0`.
+- Do not use `if ... then ...`.
+- Do not use JavaScript ternary syntax `condition ? a : b`.
+- Do not use unsupported fallback helpers such as `coalesce`.
 
 Required output schema:
 ${output_schema_json}

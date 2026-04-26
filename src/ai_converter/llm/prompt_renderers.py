@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from string import Template
@@ -98,6 +99,7 @@ def render_source_schema_prompt(
     budget: int = 1800,
     mode: EvidencePackMode = "balanced",
     format_hint: str | None = None,
+    required_semantic_paths: Mapping[str, Sequence[str]] | None = None,
     version: str = "v1",
 ) -> PromptEnvelope:
     """Render the source-schema synthesis prompt from a profile report.
@@ -107,6 +109,8 @@ def render_source_schema_prompt(
         budget: Evidence-packing budget forwarded into the renderer.
         mode: Evidence-packing mode forwarded into the renderer.
         format_hint: Optional format hint included in the packed evidence.
+        required_semantic_paths: Optional required semantic-to-source-path hints
+            preserved outside the budgeted evidence bundle.
         version: Prompt template version to load.
 
     Returns:
@@ -120,8 +124,14 @@ def render_source_schema_prompt(
             "evidence_json": _json_text(packed),
             "output_schema_json": _json_text(SourceSchemaSpec.model_json_schema()),
             "format_hint": format_hint or "unspecified",
+            "required_semantic_paths": _semantic_paths_text(required_semantic_paths),
         },
-        metadata={"budget": budget, "mode": mode, "format_hint": format_hint},
+        metadata={
+            "budget": budget,
+            "mode": mode,
+            "format_hint": format_hint,
+            **_semantic_paths_metadata(required_semantic_paths),
+        },
     )
 
 
@@ -130,6 +140,7 @@ def render_mapping_ir_prompt(
     target_schema: TargetSchemaCard,
     *,
     conversion_hint: str | None = None,
+    required_semantic_paths: Mapping[str, Sequence[str]] | None = None,
     version: str = "v1",
 ) -> PromptEnvelope:
     """Render the mapping-synthesis prompt from source and target contracts.
@@ -138,6 +149,8 @@ def render_mapping_ir_prompt(
         source_schema: Canonical source schema available to the synthesizer.
         target_schema: Canonical target schema card for the fixed L1 contract.
         conversion_hint: Optional extra mapping hint for later real adapters.
+        required_semantic_paths: Optional completed semantic-to-source-path
+            mapping shown explicitly to the mapping model.
         version: Prompt template version to load.
 
     Returns:
@@ -153,11 +166,13 @@ def render_mapping_ir_prompt(
             "output_schema_json": _json_text(MappingIR.model_json_schema()),
             "allowed_operations_json": _json_text(list(SUPPORTED_OPERATION_KINDS)),
             "conversion_hint": normalized_hint,
+            "required_semantic_paths": _semantic_paths_text(required_semantic_paths),
         },
         metadata={
             "conversion_hint_present": conversion_hint is not None,
             "conversion_hint_length": len(normalized_hint),
             "conversion_hint_preview": _metadata_preview(normalized_hint),
+            **_semantic_paths_metadata(required_semantic_paths),
         },
     )
 
@@ -226,6 +241,54 @@ def _metadata_preview(value: str, *, max_length: int = 240) -> str:
     if len(normalized) <= max_length:
         return normalized
     return normalized[: max_length - 3] + "..."
+
+
+def _semantic_paths_text(
+    required_semantic_paths: Mapping[str, Sequence[str]] | None,
+) -> str:
+    """Render required semantic path hints as stable prompt text."""
+
+    if not required_semantic_paths:
+        return "- none provided"
+
+    lines: list[str] = []
+    for semantic, paths in required_semantic_paths.items():
+        unique_paths = _dedupe_strings(paths)
+        lines.append(f"- {semantic}: {', '.join(unique_paths) if unique_paths else 'missing'}")
+    return "\n".join(lines)
+
+
+def _semantic_paths_metadata(
+    required_semantic_paths: Mapping[str, Sequence[str]] | None,
+) -> dict[str, int]:
+    """Summarize semantic path hints without copying prompt body into metadata."""
+
+    if not required_semantic_paths:
+        return {
+            "required_semantic_count": 0,
+            "required_semantic_path_count": 0,
+        }
+    return {
+        "required_semantic_count": len(required_semantic_paths),
+        "required_semantic_path_count": sum(
+            len(_dedupe_strings(paths))
+            for paths in required_semantic_paths.values()
+        ),
+    }
+
+
+def _dedupe_strings(values: Sequence[str]) -> list[str]:
+    """Return non-empty strings with original order preserved."""
+
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        normalized = str(value).strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return result
 
 
 def _diff_text(expected: Any, actual: Any) -> str:

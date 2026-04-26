@@ -15,4 +15,15 @@ Respect MappingIR reference spaces strictly:
 For fallback derive expressions, use the supported Python-like helper `first_non_null`.
 It treats None, empty strings, and empty lists as missing.
 Example: `first_non_null(src_status, src_status_label, src_status_nested)`.
-Do not invent helpers such as `coalesce`, `pick_first`, or JavaScript-style `??`.
+Expression grammar is Python-like only:
+- Use ternary expressions as `a if condition else b`.
+- Do not use `null`; use `None`.
+- Do not use `&&` or `||`; use `and` or `or`.
+- Do not use `$0`.
+- Do not use `if ... then ...`.
+- Do not use JavaScript ternary syntax `condition ? a : b`.
+- Do not use unsupported fallback helpers such as `coalesce`, `pick_first`, or JavaScript-style `??`.
+Valid status fallback example:
+- declare source refs `src_status`, `src_status_label`, and `src_status_nested`;
+- create a derive step with `source_refs` set to those ids;
+- set `expression` to `first_non_null(src_status, src_status_label, src_status_nested)`.

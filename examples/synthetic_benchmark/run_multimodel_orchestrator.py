@@ -64,7 +64,7 @@ SCHEMA_BUDGET = 1800
 MAPPING_CANDIDATE_COUNT = 2
 MAPPING_REPAIR_BUDGET = 1
 REQUIRED_TASK_FIELDS = ("id", "name", "status", "duration_days", "tags")
-REQUIRED_SOURCE_SEMANTICS = ("id", "name", "status", "duration_days", "tags")
+REQUIRED_SOURCE_SEMANTICS = ("id", "name", "status", "duration_days", "tags", "assignee")
 STATIC_DATASET_NAME = "static"
 LLM_DYNAMIC_DATASET_NAME = "llm_dynamic"
 
@@ -566,6 +566,7 @@ def _run_converter_generation(
         budget=SCHEMA_BUDGET,
         mode="balanced",
         format_hint="synthetic task row json examples",
+        required_semantic_paths=_build_required_semantic_paths_from_profile(profile_report),
         metadata={
             "dataset": dataset.dataset_name,
             "model": endpoint.model,
@@ -609,6 +610,7 @@ def _run_converter_generation(
         target_schema,
         candidate_count=MAPPING_CANDIDATE_COUNT,
         conversion_hint=mapping_conversion_hint,
+        required_semantic_paths=_build_required_semantic_paths_from_schema(source_schema),
         metadata={
             "dataset": dataset.dataset_name,
             "model": endpoint.model,
@@ -1193,6 +1195,36 @@ def _build_schema_coverage_report(source_schema: SourceSchemaSpec) -> dict[str, 
         "required_semantics": required,
         "missing_required_semantics": missing,
     }
+
+
+def _build_required_semantic_paths_from_profile(profile_report: Any) -> dict[str, list[str]]:
+    """Infer required semantic path hints directly from profile evidence."""
+
+    semantic_paths: dict[str, list[str]] = {}
+    inferred_fields = [
+        _source_field_from_profile(field_profile)
+        for field_profile in profile_report.field_profiles
+    ]
+    for semantic in REQUIRED_SOURCE_SEMANTICS:
+        semantic_paths[semantic] = [
+            field.path
+            for field in inferred_fields
+            if _field_matches_required_semantic(field, semantic)
+        ]
+    return semantic_paths
+
+
+def _build_required_semantic_paths_from_schema(source_schema: SourceSchemaSpec) -> dict[str, list[str]]:
+    """Build required semantic path hints from the completed source schema."""
+
+    semantic_paths: dict[str, list[str]] = {}
+    for semantic in REQUIRED_SOURCE_SEMANTICS:
+        semantic_paths[semantic] = [
+            field.path
+            for field in source_schema.fields
+            if _field_matches_required_semantic(field, semantic)
+        ]
+    return semantic_paths
 
 
 def _field_matches_required_semantic(field: SourceFieldSpec, semantic: str) -> bool:

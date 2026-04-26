@@ -6,5 +6,8 @@ ${format_hint}
 Evidence bundle:
 ${evidence_json}
 
+Required semantic evidence paths:
+${required_semantic_paths}
+
 Required output schema:
 ${output_schema_json}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -100,6 +101,7 @@ class MappingSynthesizer:
         budget: int = 1800,
         mode: str = "balanced",
         format_hint: str | None = None,
+        required_semantic_paths: Mapping[str, Sequence[str]] | None = None,
         version: str = "v1",
         metadata: dict[str, Any] | None = None,
     ) -> LLMResponse[SourceSchemaSpec]:
@@ -110,6 +112,8 @@ class MappingSynthesizer:
             budget: Evidence budget forwarded into the prompt renderer.
             mode: Evidence packing mode forwarded into the prompt renderer.
             format_hint: Optional format hint included in prompt metadata.
+            required_semantic_paths: Optional semantic-to-source-path hints
+                preserved outside the budgeted evidence bundle.
             version: Prompt template version to render.
             metadata: Optional extra request metadata for the adapter.
 
@@ -122,6 +126,7 @@ class MappingSynthesizer:
             budget=budget,
             mode=mode,
             format_hint=format_hint,
+            required_semantic_paths=required_semantic_paths,
             version=version,
         )
         response = self._generate_structured(
@@ -145,6 +150,7 @@ class MappingSynthesizer:
         *,
         candidate_count: int = 3,
         conversion_hint: str | None = None,
+        required_semantic_paths: Mapping[str, Sequence[str]] | None = None,
         version: str = "v1",
         metadata: dict[str, Any] | None = None,
     ) -> MappingSynthesisResult:
@@ -155,6 +161,8 @@ class MappingSynthesizer:
             target_schema: Canonical target schema card.
             candidate_count: Number of structured mapping candidates to request.
             conversion_hint: Optional extra conversion hint for the prompt.
+            required_semantic_paths: Optional completed semantic-to-source-path
+                mapping shown explicitly in the rendered prompt.
             version: Prompt template version to render.
             metadata: Optional extra request metadata for the adapter.
 
@@ -166,6 +174,7 @@ class MappingSynthesizer:
             source_schema,
             target_schema,
             conversion_hint=conversion_hint,
+            required_semantic_paths=required_semantic_paths,
             version=version,
         )
 
