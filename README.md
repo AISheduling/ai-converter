@@ -1,10 +1,10 @@
 # ai-converter
 
-`ai-converter` is a deterministic Python library for preparing free-form `L0` schedule data for later conversion into a fixed `L1` DSL.
+`ai-converter` is a deterministic Python library for turning free-form `L0` schedule data into validated, versioned converter artifacts for a fixed `L1` DSL.
 
 It exists to make the early conversion pipeline reproducible before any live model call happens: profile messy inputs, derive stable contracts, synthesize or validate mapping plans offline, and benchmark the resulting converters with deterministic fixtures.
 
-At the current stage the library gives you six main building blocks:
+At the current stage the library gives you seven main building blocks:
 
 - profiling raw `CSV`, `JSON`, and `JSONL` inputs into a stable `ProfileReport`
 - building schema contracts and compact evidence bundles on top of that profile
@@ -12,6 +12,7 @@ At the current stage the library gives you six main building blocks:
 - compiling valid `MappingIR` programs into versioned `ConverterPackage` artifacts with offline acceptance validation
 - classifying compatible versus breaking input drift and generating local patches
 - benchmarking baseline and compiled converters with deterministic metrics, canonical report exports, and optional timing telemetry
+- generating deterministic synthetic benchmark bundles, drift variants, and optional LLM-assisted template surfaces for repeatable evaluation
 
 Test-running instructions live in [tests/README.md](tests/README.md).
 
@@ -457,8 +458,7 @@ print(paths["telemetry_boxplot_csv"])
 This stays library-first: there is no required CLI. The grouped export writes
 canonical repeated-run summaries to `*.summary.json` / `*.summary.csv`, long-form
 distribution rows to `*.boxplot.csv`, and timing-only distributions to
-`*.telemetry.boxplot.csv`. If you want a thin runnable wrapper around the same
-API, see `examples/synthetic_benchmark/run_example.py`.
+`*.telemetry.boxplot.csv`.
 
 For one end-to-end offline reference flow, run:
 
@@ -466,20 +466,15 @@ For one end-to-end offline reference flow, run:
 python examples/synthetic_benchmark/run_example.py --run-count 2
 ```
 
-The example writes per-run canonical reports under
-`examples/synthetic_benchmark/generated/runs/` and grouped summary or boxplot
-artifacts under `examples/synthetic_benchmark/generated/`.
+The example stays offline, generates a small deterministic base-plus-drift
+experiment, and writes per-run canonical reports plus grouped summary and
+telemetry artifacts under `examples/synthetic_benchmark/generated/`.
 
-If you want the same workflow as a tiny runnable example, use the thin example
-runner under `examples/synthetic_benchmark/run_example.py`:
-
-```bash
-python examples/synthetic_benchmark/run_example.py --run-count 2
-```
-
-It stays offline, generates a small deterministic base-plus-drift experiment,
-and writes canonical per-run reports plus grouped summary and telemetry
-artifacts under `examples/synthetic_benchmark/generated/`.
+For a larger static-vs-LLM-template and multi-model converter matrix, see
+`examples/synthetic_benchmark/run_multimodel_orchestrator.py`. Repository tests
+exercise that orchestrator with injected fake OpenAI-compatible clients; live
+runs require explicit endpoint configuration and are not part of the offline
+verification path.
 
 ## Use The Synthetic Benchmark Foundation
 
@@ -715,6 +710,7 @@ print(result.accepted_template.extra_fields["source"])
 - `src/ai_converter/evaluation/` contains benchmark metrics, orchestration, and reporting
 - `src/ai_converter/synthetic_benchmark/` contains deterministic synthetic scenario sampling, shape variants, LLM-assisted template generation, drift generation, and lineage-aware bundle storage
 - `prompts/` contains versioned prompt template files
+- `prompts/synthetic_benchmark_template/` contains the active synthetic template-generation prompt bundle
 - `docs/architecture/profiling.md` documents the profiling design
 - `docs/architecture/schema_contracts.md` documents the schema contract layer
 - `docs/prompts/mapping_ir.md` documents the MappingIR prompt layer
@@ -724,10 +720,12 @@ print(result.accepted_template.extra_fields["source"])
 - `docs/synthetic_benchmark/drift.md` documents synthetic drift generation and lineage
 - `docs/synthetic_benchmark/generators.md` documents the synthetic template generator, validation gates, and cache behavior
 - `examples/benchmark_config.json` shows an illustrative benchmark layout
+- `examples/synthetic_benchmark/run_example.py` and `examples/synthetic_benchmark/run_multimodel_orchestrator.py` provide runnable synthetic benchmark workflows
 
 ## Project Notes
 
 - `dsl-core/` is treated as an external, read-only reference for the fixed `L1` DSL.
-- The current library scope is deterministic preparation and schema-contract work; live LLM calls are intentionally out of scope here.
-- Drift handling, patch application, and benchmark reporting are offline-only surfaces in the current repository.
+- The current library scope spans deterministic profiling, schema contracts, LLM adapter boundaries, MappingIR synthesis, compilation, validation, drift handling, evaluation, and synthetic benchmark generation.
+- Live LLM calls are optional adapter/example surfaces for artifact synthesis; unit and integration tests must stay offline through fake or injected clients.
+- Drift handling, patch application, synthetic bundle generation, and benchmark reporting remain deterministic local surfaces in the current repository.
 - If you need commands for running the test suites, fixtures, or focused verification flows, use [tests/README.md](tests/README.md).

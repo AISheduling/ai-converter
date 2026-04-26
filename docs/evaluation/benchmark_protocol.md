@@ -86,10 +86,6 @@ passes without introducing a second harness API. Each run remains a normal
 `BenchmarkRunResult`, and the repeated-run container keeps deterministic `run_id`
 values such as `run-001`, `run-002`, and so on.
 
-`TASK-Bench-04` stops at grouped artifact layout and repeated-run capture. Cross
-run aggregation, grouped summaries, and boxplot-ready rollups belong to
-`TASK-Bench-05`.
-
 Use `summarize_benchmark_experiment(...)` when you need grouped repeated-run
 statistics without introducing a second reporting layer. The grouped summary
 surface computes:
@@ -244,3 +240,9 @@ For one ready-to-run offline workflow, use
 base/drift experiment, executes repeated runs through the same public library
 API described above, and writes grouped summary plus telemetry artifacts under
 `examples/synthetic_benchmark/generated/`.
+
+For the larger static-vs-LLM-template benchmark matrix, use
+`examples/synthetic_benchmark/run_multimodel_orchestrator.py`. The repository
+smoke tests cover it with injected fake OpenAI-compatible clients so benchmark
+reporting, schema completion, mapping preflight, and converter export remain
+verifiable without network access.

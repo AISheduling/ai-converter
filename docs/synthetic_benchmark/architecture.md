@@ -1,9 +1,10 @@
 # Synthetic Benchmark Foundation
 
-`TASK-Bench-01` established the deterministic base bundle workflow under
-`src/ai_converter/synthetic_benchmark/`. `TASK-Bench-02` extends that same
-package with heterogeneous `L0` rendering, synthetic drift generation, and
-lineage-aware drift bundle persistence.
+The deterministic synthetic benchmark workflow lives under
+`src/ai_converter/synthetic_benchmark/`. It now covers canonical scenario
+sampling, configurable `L0` rendering, heterogeneous shape variants, synthetic
+drift generation, lineage-aware persistence, LLM-assisted template generation,
+and adapters into the shared benchmark harness.
 
 ## Design Rules
 
@@ -15,6 +16,9 @@ lineage-aware drift bundle persistence.
   candidates
   through the shared `ai_converter.llm` boundary, but the generated output is
   still only a template surface layered on top of the same canonical scenario.
+- Benchmark helpers adapt base and drift bundles into normal
+  `ai_converter.evaluation` scenarios instead of introducing a second
+  evaluation stack.
 - Synthetic drift mutates only `L0` bundle surfaces. It does not change the
   canonical scenario and does not require live models or network access.
 - Drift bundles keep explicit lineage back to a parent base bundle.
@@ -84,6 +88,13 @@ python -m pytest tests/unit/synthetic_benchmark -q -p no:cacheprovider
 
 The package remains intentionally offline-only. Synthetic drift exists to
 produce reproducible `L0` changes and lineage artifacts, not to replace the
-shared `ai_converter.drift` classifier or later benchmark/reporting tasks.
+shared `ai_converter.drift` classifier or benchmark/reporting surfaces.
 LLM-assisted template generation follows the same rule: tests stay offline
 through fake adapters and cached trace artifacts.
+
+Runnable example surfaces live under `examples/synthetic_benchmark/`:
+
+- `run_example.py` creates a small offline base-plus-drift repeated benchmark.
+- `run_multimodel_orchestrator.py` compares static and LLM-template datasets
+  across multiple converter model endpoints; repository tests inject fake
+  OpenAI-compatible clients for this path.

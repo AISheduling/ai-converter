@@ -1,6 +1,6 @@
 # Synthetic Template Generators
 
-`TASK-Bench-03` adds an offline-testable LLM-assisted generator layer under
+The offline-testable LLM-assisted generator layer lives under
 `src/ai_converter/synthetic_benchmark/generators/llm/`.
 
 Its job is intentionally narrow:

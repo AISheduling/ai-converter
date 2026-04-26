@@ -1,1 +1,1 @@
-"""Core package for deterministic L0 profiling and later conversion stages."""
+"""Deterministic L0-to-L1 conversion, validation, drift, and benchmark helpers."""

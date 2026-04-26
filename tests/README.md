@@ -4,9 +4,7 @@ This file contains the repository's test-running instructions.
 
 The test tree exists to prove that each pipeline stage stays deterministic, offline, and safe to run without live LLM calls.
 
-Run all commands from the repository root:
-
-`ai-converter`
+Run all commands from the repository root.
 
 ## General Rules
 
@@ -79,6 +77,7 @@ Smoke integration tests:
 
 - `tests/integration/converter_pipeline/`
 - includes the from-scratch example smoke run through an injected fake OpenAI client
+- includes the synthetic benchmark example runner and the multi-model synthetic benchmark orchestrator through injected fake OpenAI-compatible clients
 
 Coverage notes:
 
@@ -137,6 +136,12 @@ LLM-template generator command:
 python -m pytest tests/unit/synthetic_benchmark/generators_llm -q -p no:cacheprovider
 ```
 
+Synthetic benchmark integration command:
+
+```bash
+python -m pytest tests/integration/converter_pipeline/test_synthetic_benchmark_example.py tests/integration/converter_pipeline/test_multimodel_synthetic_benchmark_orchestrator.py -q -p no:cacheprovider
+```
+
 ## Combined Focused Run
 
 Use this when you touch the offline pipeline from mapping-ir through compiled execution:
@@ -159,7 +164,7 @@ poetry run python -m pytest tests/unit/schema -q -p no:cacheprovider
 poetry run python -m pytest tests/unit/profiling tests/unit/schema -q -p no:cacheprovider
 ```
 
-### Mapping ir only
+### Mapping IR only
 
 ```bash
 poetry run python -m pytest tests/unit/mapping_ir -q -p no:cacheprovider

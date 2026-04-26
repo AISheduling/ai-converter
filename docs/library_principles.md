@@ -6,6 +6,8 @@
 
 `ai-converter` строит offline-first pipeline для перехода от внешнего формата `L0` (`CSV`, `JSON`, `JSONL`) к фиксированному `L1`, описанному через `Pydantic`. Ключевая идея библиотеки: LLM допускается только на этапе синтеза артефактов, а не в эксплуатационном runtime. После публикации конвертера преобразование новых записей выполняется детерминированным Python-кодом.
 
+Отдельный synthetic benchmark слой генерирует воспроизводимые `L0`/`L1` bundle-ы, drift-варианты и LLM-template поверхности для проверки конвертеров без ручной подготовки новых датасетов.
+
 Текущий pipeline в кодовой базе выглядит так:
 
 `ProfileReport -> SourceSchemaSpec -> TargetSchemaCard -> MappingIR -> ConverterPackage -> Acceptance/Repair -> DriftReport/ConverterPatch`
@@ -19,6 +21,7 @@
 - компиляция и валидация: [`src/ai_converter/compiler/`](../src/ai_converter/compiler/), [`src/ai_converter/validation/`](../src/ai_converter/validation/)
 - drift и patch adaptation: [`src/ai_converter/drift/`](../src/ai_converter/drift/)
 - benchmark/evaluation: [`src/ai_converter/evaluation/`](../src/ai_converter/evaluation/)
+- synthetic benchmark foundation: [`src/ai_converter/synthetic_benchmark/`](../src/ai_converter/synthetic_benchmark/)
 
 ## 2. Основные принципы и их обоснование
 
@@ -210,6 +213,7 @@ LLM не должен получать "сырой" источник как ед
 - `validation/` измеряет структурную и семантическую корректность и запускает bounded repair.
 - `drift/` сравнивает baseline и candidate представления источника и предлагает локальные patch-операции.
 - `evaluation/` дает воспроизводимый benchmark-контур для сравнения конвертеров и baseline-решений.
+- `synthetic_benchmark/` строит детерминированные сценарии, `L0`/`L1` bundle-ы, drift-варианты и LLM-template поверхности для benchmark workflow.
 
 ## 4. Псевдокод: цикл построения правила
 
@@ -370,6 +374,7 @@ flowchart TD
 - prompt layer и `MappingIR`: [`docs/prompts/mapping_ir.md`](prompts/mapping_ir.md)
 - компилятор и валидация: [`docs/architecture/compiler_and_validation.md`](architecture/compiler_and_validation.md)
 - benchmark/evaluation: [`docs/evaluation/benchmark_protocol.md`](evaluation/benchmark_protocol.md)
+- synthetic benchmark: [`docs/synthetic_benchmark/architecture.md`](synthetic_benchmark/architecture.md), [`docs/synthetic_benchmark/generators.md`](synthetic_benchmark/generators.md)
 - drift classification: [`src/ai_converter/drift/classifier.py`](../src/ai_converter/drift/classifier.py)
 - heuristic patching: [`src/ai_converter/drift/heuristics.py`](../src/ai_converter/drift/heuristics.py)
 - patch application: [`src/ai_converter/drift/patch_apply.py`](../src/ai_converter/drift/patch_apply.py)

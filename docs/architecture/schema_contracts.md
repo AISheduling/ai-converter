@@ -2,7 +2,7 @@
 
 # Schema Contracts
 
-Schema contracts add a schema-first bridge between profiling outputs and future LLM-driven synthesis steps.
+Schema contracts add a schema-first bridge between profiling outputs and LLM-driven synthesis steps.
 
 ## Package layout
 
