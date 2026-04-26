@@ -625,6 +625,7 @@ def _run_converter_generation(
         mapping_result,
         source_schema=source_schema,
         target_schema=target_schema,
+        smoke_scenarios=dataset.scenarios,
     )
     mapping_preflight_report = _build_mapping_preflight_report(
         mapping_ir,
@@ -1332,26 +1333,82 @@ def _select_mapping_candidate(
     *,
     source_schema: SourceSchemaSpec,
     target_schema: TargetSchemaCard,
+    smoke_scenarios: Sequence[BenchmarkScenario] | None = None,
 ) -> tuple[MappingIR, dict[str, Any]]:
-    """Pick the first valid mapping candidate or repair a recoverable one.
+    """Pick the best valid mapping candidate using runtime smoke evidence.
 
     Args:
         mapping_result: Ordered mapping synthesis result returned by the orchestrator.
         source_schema: Canonical source schema available to the current run.
         target_schema: Canonical target schema card.
+        smoke_scenarios: Optional benchmark scenarios used for deterministic
+            compile/runtime candidate smoke ranking.
 
     Returns:
         Tuple of selected mapping IR and machine-readable selection report.
     """
 
+    smoke_subset = _build_mapping_candidate_smoke_scenarios(
+        smoke_scenarios or [],
+        source_schema=source_schema,
+    )
+    scored_candidates: list[tuple[Any, dict[str, Any]]] = []
     for candidate in mapping_result.candidates:
         if candidate.ranked.validation.valid and candidate.ranked.candidate is not None:
-            return candidate.ranked.candidate, {
-                "selected_candidate_index": candidate.index,
-                "selection_mode": "direct_valid_candidate",
+            if not smoke_subset:
+                return candidate.ranked.candidate, {
+                    "selected_candidate_index": candidate.index,
+                    "selection_mode": "direct_valid_candidate",
+                    "repair_applied": False,
+                    "initial_validation": candidate.ranked.validation.model_dump(mode="json"),
+                }
+            scored_candidates.append(
+                (
+                    candidate,
+                    _score_mapping_candidate_smoke(
+                        candidate.ranked.candidate,
+                        candidate_index=candidate.index,
+                        validation=candidate.ranked.validation,
+                        smoke_scenarios=smoke_subset,
+                    ),
+                )
+            )
+
+    if scored_candidates:
+        passing_candidates = [
+            (candidate, score)
+            for candidate, score in scored_candidates
+            if score["smoke_passed"]
+        ]
+        candidate_scores = [score for _, score in scored_candidates]
+        if passing_candidates:
+            selected_candidate, selected_score = max(
+                passing_candidates,
+                key=lambda item: _mapping_smoke_selection_key(item[1], item[0]),
+            )
+            return selected_candidate.ranked.candidate, {
+                "selected_candidate_index": selected_candidate.index,
+                "selection_mode": "runtime_smoke_ranked_candidate",
                 "repair_applied": False,
-                "initial_validation": candidate.ranked.validation.model_dump(mode="json"),
+                "initial_validation": selected_candidate.ranked.validation.model_dump(mode="json"),
+                "validation_summary": selected_score["validation_summary"],
+                "smoke_score": selected_score["smoke_score"],
+                "candidate_scores": candidate_scores,
             }
+
+        detail = "; ".join(
+            (
+                f"candidate {score['candidate_index']}: "
+                f"compile_success={score['compile_success']}, "
+                f"execution_success_rate={score['execution_success_rate']:.3f}, "
+                f"runtime_errors={score['runtime_errors'] or {}}"
+            )
+            for score in candidate_scores
+        )
+        raise RuntimeError(
+            "Mapping synthesis produced validator-valid candidates, but none passed "
+            f"runtime smoke selection. Details: {detail}"
+        )
 
     diagnostics: list[str] = []
     for candidate in mapping_result.candidates:
@@ -1393,6 +1450,272 @@ def _select_mapping_candidate(
 
     detail = "; ".join(diagnostics) if diagnostics else "no mapping candidates were returned"
     raise RuntimeError(f"Mapping synthesis did not produce a valid candidate. Details: {detail}")
+
+
+def _build_mapping_candidate_smoke_scenarios(
+    scenarios: Sequence[BenchmarkScenario],
+    *,
+    source_schema: SourceSchemaSpec,
+) -> list[BenchmarkScenario]:
+    """Build a small deterministic smoke subset for MappingIR candidate ranking.
+
+    Args:
+        scenarios: Full benchmark scenarios for the current synthetic dataset.
+        source_schema: Source schema used to synthesize an optional missing-tags
+            smoke case when the sampled scenarios do not contain one.
+
+    Returns:
+        A single smoke scenario containing one case per input scenario plus a
+        missing-tags case when available or synthesizable.
+    """
+
+    selected: list[BenchmarkCase] = []
+    selected_keys: set[tuple[str, str]] = set()
+    all_cases: list[tuple[str, BenchmarkCase]] = []
+    for scenario in scenarios:
+        for case in scenario.cases:
+            all_cases.append((scenario.name, case))
+        if scenario.cases:
+            key = (scenario.name, scenario.cases[0].name)
+            selected.append(_copy_benchmark_case(scenario.cases[0]))
+            selected_keys.add(key)
+
+    missing_tags_case = next(
+        (
+            (scenario_name, case)
+            for scenario_name, case in all_cases
+            if not case.expected_output.get("tags")
+        ),
+        None,
+    )
+    if (
+        missing_tags_case is not None
+        and (missing_tags_case[0], missing_tags_case[1].name) not in selected_keys
+    ):
+        scenario_name, case = missing_tags_case
+        selected.append(_copy_benchmark_case(case))
+        selected_keys.add((scenario_name, case.name))
+
+    if selected and all(case.expected_output.get("tags") for case in selected):
+        selected.append(
+            _build_missing_tags_smoke_case(
+                selected[0],
+                source_schema=source_schema,
+            )
+        )
+
+    if not selected:
+        return []
+    target_model = next(
+        (scenario.target_model for scenario in scenarios if scenario.target_model is not None),
+        None,
+    )
+    return [
+        BenchmarkScenario(
+            name="mapping-candidate-runtime-smoke",
+            cases=selected,
+            target_model=target_model,
+            tags=["mapping_candidate_smoke"],
+        )
+    ]
+
+
+def _score_mapping_candidate_smoke(
+    mapping_ir: MappingIR,
+    *,
+    candidate_index: int,
+    validation: Any,
+    smoke_scenarios: Sequence[BenchmarkScenario],
+) -> dict[str, Any]:
+    """Compile and run one MappingIR candidate against the smoke subset."""
+
+    report: dict[str, Any] = {
+        "candidate_index": candidate_index,
+        "validation_summary": _validation_summary(validation),
+        "compile_success": False,
+        "execution_success_rate": 0.0,
+        "structural_validity_rate": 0.0,
+        "required_field_accuracy": 0.0,
+        "runtime_error_count": 0,
+        "runtime_errors": {},
+        "smoke_score": 0.0,
+        "smoke_passed": False,
+    }
+    try:
+        package = compile_mapping_ir(
+            mapping_ir,
+            module_name=f"mapping_candidate_{candidate_index}_smoke_converter",
+        )
+    except Exception as exc:
+        message = str(exc) or exc.__class__.__name__
+        report["compile_error"] = message
+        report["runtime_error_count"] = 1
+        report["runtime_errors"] = {message: 1}
+        return report
+
+    report["compile_success"] = True
+    experiment = run_repeated_benchmark(
+        [
+            BenchmarkSubject.from_converter_package(
+                f"candidate_{candidate_index}",
+                package,
+                kind="compiled",
+            )
+        ],
+        list(smoke_scenarios),
+        run_count=1,
+        experiment_name=f"mapping-candidate-{candidate_index}-smoke",
+    )
+    case_results = [
+        case_result
+        for run in experiment.runs
+        for scenario_result in run.result.scenario_results
+        for subject_result in scenario_result.subject_results
+        for case_result in subject_result.case_results
+    ]
+    runtime_errors = _runtime_error_counts(case_results)
+    execution_values = [1.0 if case_result.execution_success else 0.0 for case_result in case_results]
+    structural_values = [
+        1.0 if case_result.structural_validity else 0.0
+        for case_result in case_results
+        if case_result.structural_validity is not None
+    ]
+    required_accuracy_values = [
+        case_result.metrics.required_field_accuracy
+        for case_result in case_results
+    ]
+    execution_success_rate = _safe_mean(execution_values)
+    structural_validity_rate = (
+        _safe_mean(structural_values)
+        if structural_values
+        else execution_success_rate
+    )
+    required_field_accuracy = _safe_mean(required_accuracy_values)
+    runtime_error_count = sum(runtime_errors.values())
+    smoke_score = max(
+        0.0,
+        round(
+            (execution_success_rate * 4.0)
+            + (structural_validity_rate * 2.0)
+            + (required_field_accuracy * 4.0)
+            - (min(runtime_error_count, 100) * 0.01),
+            6,
+        ),
+    )
+    report.update(
+        {
+            "execution_success_rate": execution_success_rate,
+            "structural_validity_rate": structural_validity_rate,
+            "required_field_accuracy": required_field_accuracy,
+            "runtime_error_count": runtime_error_count,
+            "runtime_errors": runtime_errors,
+            "smoke_score": smoke_score,
+            "smoke_passed": bool(case_results) and execution_success_rate > 0.0,
+        }
+    )
+    return report
+
+
+def _mapping_smoke_selection_key(score: dict[str, Any], candidate: Any) -> tuple[float, float, float, float, float]:
+    """Build a deterministic sort key for smoke-ranked candidates."""
+
+    return (
+        float(score["smoke_score"]),
+        float(score["execution_success_rate"]),
+        float(score["structural_validity_rate"]),
+        float(score["required_field_accuracy"]),
+        -float(candidate.index),
+    )
+
+
+def _validation_summary(validation: Any) -> dict[str, Any]:
+    """Return compact validation details for mapping selection reports."""
+
+    issues = getattr(validation, "issues", [])
+    return {
+        "valid": bool(getattr(validation, "valid", False)),
+        "issue_count": len(issues),
+        "issues": [
+            issue.model_dump(mode="json") if hasattr(issue, "model_dump") else dict(issue)
+            for issue in issues
+        ],
+    }
+
+
+def _runtime_error_counts(case_results: Sequence[Any]) -> dict[str, int]:
+    """Count per-case runtime errors deterministically."""
+
+    counts: dict[str, int] = {}
+    for case_result in case_results:
+        if not case_result.error:
+            continue
+        counts[case_result.error] = counts.get(case_result.error, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _copy_benchmark_case(case: BenchmarkCase) -> BenchmarkCase:
+    """Deep-copy a benchmark case without sharing mutable payloads."""
+
+    return BenchmarkCase(
+        name=case.name,
+        record=copy.deepcopy(case.record),
+        expected_output=copy.deepcopy(case.expected_output),
+        required_fields=list(case.required_fields),
+        assertions=copy.deepcopy(case.assertions),
+        tags=list(case.tags),
+    )
+
+
+def _build_missing_tags_smoke_case(
+    case: BenchmarkCase,
+    *,
+    source_schema: SourceSchemaSpec,
+) -> BenchmarkCase:
+    """Create a deterministic missing-tags variant from an existing smoke case."""
+
+    record = copy.deepcopy(case.record)
+    for path in _source_paths_for_required_semantic(source_schema, "tags"):
+        _remove_record_path(record, path)
+    expected_output = copy.deepcopy(case.expected_output)
+    expected_output["tags"] = []
+    return BenchmarkCase(
+        name=f"{case.name}:tags-missing",
+        record=record,
+        expected_output=expected_output,
+        required_fields=list(case.required_fields),
+        assertions=copy.deepcopy(case.assertions),
+        tags=_dedupe_tags([*case.tags, "smoke:tags_missing"]),
+    )
+
+
+def _source_paths_for_required_semantic(
+    source_schema: SourceSchemaSpec,
+    semantic: str,
+) -> list[str]:
+    """Return schema paths matching a required source semantic."""
+
+    return [
+        field.path
+        for field in source_schema.fields
+        if _field_matches_required_semantic(field, semantic)
+    ]
+
+
+def _remove_record_path(record: dict[str, Any], path: str) -> None:
+    """Remove one dotted source path from a smoke record when present."""
+
+    clean_segments = [
+        segment.replace("[]", "")
+        for segment in path.split(".")
+        if segment
+    ]
+    current: Any = record
+    for segment in clean_segments[:-1]:
+        if not isinstance(current, dict):
+            return
+        current = current.get(segment)
+    if isinstance(current, dict) and clean_segments:
+        current.pop(clean_segments[-1], None)
 
 
 def _repair_mapping_candidate(

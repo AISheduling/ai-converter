@@ -8,10 +8,22 @@ import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
-from ai_converter.mapping_ir import MappingIR, MappingIRValidator, MappingStep, SourceReference, StepOperation, TargetAssignment
+import pytest
+
+from ai_converter.evaluation import BenchmarkCase, BenchmarkScenario
+from ai_converter.mapping_ir import (
+    ConditionClause,
+    MappingIR,
+    MappingIRValidator,
+    MappingStep,
+    SourceReference,
+    StepOperation,
+    TargetAssignment,
+    evaluate_candidate,
+)
 from ai_converter.schema import SourceFieldSpec, SourceSchemaSpec, build_target_schema_card
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -144,6 +156,11 @@ def test_multimodel_orchestrator_runs_offline() -> None:
         assert Path(run["converter_manifest_path"]).exists()
         assert Path(run["benchmark_experiment_json_path"]).exists()
         assert Path(run["benchmark_summary_json_path"]).exists()
+        mapping_selection = json.loads(Path(run["mapping_selection_path"]).read_text(encoding="utf-8"))
+        assert mapping_selection["selection_mode"] == "runtime_smoke_ranked_candidate"
+        assert mapping_selection["candidate_scores"]
+        assert "smoke_score" in mapping_selection["candidate_scores"][0]
+        assert "runtime_errors" in mapping_selection["candidate_scores"][0]
         assert run["mapping_validation"]["valid"] is True
         assert run["benchmark_metrics"]["all_scenarios_passed"] is True
         assert run["benchmark_metrics"]["mean_pass_at_1"] == 1.0
@@ -213,6 +230,88 @@ def test_orchestrator_completes_omitted_schema_fields_and_reports_preflight() ->
     for call in first_client.responses.create_calls:
         for value in (call.get("metadata") or {}).values():
             assert len(str(value)) <= 512
+
+
+def test_select_mapping_candidate_smoke_ranks_runtime_failures() -> None:
+    """Verify runtime smoke checks de-prioritize validator-valid failures."""
+
+    module = _load_example_module()
+    target_schema = build_target_schema_card(module.SyntheticBenchmarkTask)
+    source_schema = _static_source_schema()
+    failing_program = _static_mapping_ir().model_copy(
+        update={
+            "preconditions": [
+                ConditionClause(
+                    kind="equals",
+                    ref="src_task_id",
+                    value="never-selected",
+                    description="force runtime smoke failure",
+                )
+            ]
+        }
+    )
+    passing_program = _static_mapping_ir()
+    mapping_result = SimpleNamespace(
+        candidates=[
+            _mapping_candidate_record(0, failing_program, source_schema, target_schema),
+            _mapping_candidate_record(1, passing_program, source_schema, target_schema),
+        ]
+    )
+
+    selected, selection = module._select_mapping_candidate(
+        mapping_result,
+        source_schema=source_schema,
+        target_schema=target_schema,
+        smoke_scenarios=_static_smoke_scenarios(module),
+    )
+
+    assert selected == passing_program
+    assert selection["selection_mode"] == "runtime_smoke_ranked_candidate"
+    assert selection["selected_candidate_index"] == 1
+    assert selection["candidate_scores"][0]["validation_summary"]["valid"] is True
+    assert selection["candidate_scores"][0]["compile_success"] is True
+    assert selection["candidate_scores"][0]["execution_success_rate"] == 0.0
+    assert selection["candidate_scores"][0]["runtime_errors"] == {
+        "force runtime smoke failure": 4
+    }
+    assert selection["candidate_scores"][1]["execution_success_rate"] == 1.0
+    assert selection["candidate_scores"][1]["required_field_accuracy"] == 1.0
+
+
+def test_select_mapping_candidate_errors_when_all_valid_candidates_fail_smoke() -> None:
+    """Verify all-smoke-failing valid candidates produce a clear selection error."""
+
+    module = _load_example_module()
+    target_schema = build_target_schema_card(module.SyntheticBenchmarkTask)
+    source_schema = _static_source_schema()
+    failing_program = _static_mapping_ir().model_copy(
+        update={
+            "preconditions": [
+                ConditionClause(
+                    kind="equals",
+                    ref="src_task_id",
+                    value="never-selected",
+                    description="force runtime smoke failure",
+                )
+            ]
+        }
+    )
+    mapping_result = SimpleNamespace(
+        candidates=[
+            _mapping_candidate_record(0, failing_program, source_schema, target_schema),
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="none passed runtime smoke selection") as exc_info:
+        module._select_mapping_candidate(
+            mapping_result,
+            source_schema=source_schema,
+            target_schema=target_schema,
+            smoke_scenarios=_static_smoke_scenarios(module),
+        )
+
+    assert "candidate 0" in str(exc_info.value)
+    assert "execution_success_rate=0.000" in str(exc_info.value)
 
 
 def test_repair_mapping_candidate_recovers_copy_prefixed_assignment_refs() -> None:
@@ -337,6 +436,130 @@ def _fake_mapping_responses(mapping_ir: MappingIR, count: int) -> list[_FakeOpen
     """Build repeated fake mapping responses for multi-candidate synthesis."""
 
     return [_fake_response(mapping_ir) for _ in range(count)]
+
+
+def _mapping_candidate_record(
+    index: int,
+    mapping_ir: MappingIR,
+    source_schema: SourceSchemaSpec,
+    target_schema: Any,
+) -> SimpleNamespace:
+    """Build a lightweight candidate record for selector tests."""
+
+    validation = MappingIRValidator().validate(
+        mapping_ir,
+        source_schema=source_schema,
+        target_schema=target_schema,
+    )
+    return SimpleNamespace(
+        index=index,
+        response=SimpleNamespace(parsed=mapping_ir, errors=[]),
+        ranked=evaluate_candidate(mapping_ir, validation=validation, target_schema=target_schema),
+    )
+
+
+def _static_smoke_scenarios(module: ModuleType) -> list[BenchmarkScenario]:
+    """Build base, rename, nesting, and missing-tag smoke cases."""
+
+    return [
+        BenchmarkScenario(
+            name="static-smoke-base",
+            target_model=module.SyntheticBenchmarkTask,
+            cases=[
+                BenchmarkCase(
+                    name="base",
+                    record={
+                        "task_id": "TASK-1",
+                        "task_name": "Base row",
+                        "status_text": "todo",
+                        "duration_days": 3,
+                        "assignee": "Ada",
+                        "tags": ["base", "tagged"],
+                    },
+                    expected_output={
+                        "id": "TASK-1",
+                        "name": "Base row",
+                        "status": "todo",
+                        "duration_days": 3,
+                        "assignee": "Ada",
+                        "tags": ["base", "tagged"],
+                    },
+                    required_fields=list(module.REQUIRED_TASK_FIELDS),
+                )
+            ],
+        ),
+        BenchmarkScenario(
+            name="static-smoke-rename",
+            target_model=module.SyntheticBenchmarkTask,
+            cases=[
+                BenchmarkCase(
+                    name="rename",
+                    record={
+                        "task_id": "TASK-2",
+                        "task_name": "Rename row",
+                        "status_text_label": "doing",
+                        "duration_days": 5,
+                        "assignee": "Grace",
+                        "tags": ["rename"],
+                    },
+                    expected_output={
+                        "id": "TASK-2",
+                        "name": "Rename row",
+                        "status": "doing",
+                        "duration_days": 5,
+                        "assignee": "Grace",
+                        "tags": ["rename"],
+                    },
+                    required_fields=list(module.REQUIRED_TASK_FIELDS),
+                )
+            ],
+        ),
+        BenchmarkScenario(
+            name="static-smoke-nesting",
+            target_model=module.SyntheticBenchmarkTask,
+            cases=[
+                BenchmarkCase(
+                    name="nesting",
+                    record={
+                        "task_id": "TASK-3",
+                        "task_name": "Nested row",
+                        "status": {"details": "blocked"},
+                        "duration_days": 8,
+                        "assignee": None,
+                        "tags": ["nested"],
+                    },
+                    expected_output={
+                        "id": "TASK-3",
+                        "name": "Nested row",
+                        "status": "blocked",
+                        "duration_days": 8,
+                        "assignee": None,
+                        "tags": ["nested"],
+                    },
+                    required_fields=list(module.REQUIRED_TASK_FIELDS),
+                ),
+                BenchmarkCase(
+                    name="missing-tags",
+                    record={
+                        "task_id": "TASK-4",
+                        "task_name": "Missing tags row",
+                        "status": {"details": "done"},
+                        "duration_days": 1,
+                        "assignee": "Lin",
+                    },
+                    expected_output={
+                        "id": "TASK-4",
+                        "name": "Missing tags row",
+                        "status": "done",
+                        "duration_days": 1,
+                        "assignee": "Lin",
+                        "tags": [],
+                    },
+                    required_fields=list(module.REQUIRED_TASK_FIELDS),
+                ),
+            ],
+        ),
+    ]
 
 
 def _dynamic_template_payload() -> dict[str, Any]:
