@@ -314,6 +314,194 @@ def test_select_mapping_candidate_errors_when_all_valid_candidates_fail_smoke() 
     assert "execution_success_rate=0.000" in str(exc_info.value)
 
 
+def test_select_mapping_candidate_repairs_status_surface_precondition_failure() -> None:
+    """Verify deterministic runtime repair removes one over-strict status precondition."""
+
+    module = _load_example_module()
+    target_schema = build_target_schema_card(module.SyntheticBenchmarkTask)
+    source_schema = _static_source_schema()
+    failing_program = _static_mapping_ir().model_copy(
+        update={
+            "preconditions": [
+                ConditionClause(
+                    kind="exists",
+                    ref="src_status_nested",
+                    description="requires nested status surface",
+                )
+            ]
+        }
+    )
+    mapping_result = SimpleNamespace(
+        candidates=[
+            _mapping_candidate_record(0, failing_program, source_schema, target_schema),
+        ]
+    )
+
+    selected, selection = module._select_mapping_candidate(
+        mapping_result,
+        source_schema=source_schema,
+        target_schema=target_schema,
+        smoke_scenarios=_static_smoke_scenarios(module),
+    )
+
+    repair_report = selection["repair_report"]
+    assert selected.preconditions == []
+    assert selection["selection_mode"] == "runtime_smoke_repaired_candidate"
+    assert selection["selected_candidate_index"] == 0
+    assert selection["repair_applied"] is True
+    assert repair_report["repair_attempted"] is True
+    assert repair_report["repair_budget"] == {"configured": 1, "consumed": 1}
+    assert repair_report["original_error"]["runtime_errors"] == {
+        "requires nested status surface": 2
+    }
+    assert repair_report["post_repair_validation"]["valid"] is True
+    assert repair_report["post_repair_smoke_score"]["execution_success_rate"] == 1.0
+    assert repair_report["post_repair_smoke_score"]["runtime_errors"] == {}
+    assert repair_report["rewritten_locations"] == [
+        {
+            "kind": "remove_status_surface_precondition",
+            "location": "preconditions[0]",
+            "before": {
+                "kind": "exists",
+                "ref": "src_status_nested",
+                "value": None,
+                "description": "requires nested status surface",
+            },
+            "after": None,
+        }
+    ]
+
+
+def test_select_mapping_candidate_repairs_optional_list_copy_default_failure() -> None:
+    """Verify deterministic runtime repair defaults missing optional list targets."""
+
+    module = _load_example_module()
+    target_schema = build_target_schema_card(module.SyntheticBenchmarkTask)
+    source_schema = _static_source_schema()
+    failing_program = _static_mapping_ir()
+    failing_steps = [
+        step.model_copy(
+            update={
+                "operation": StepOperation(kind="copy", source_ref="src_tags"),
+            }
+        )
+        if step.id == "default_tags"
+        else step
+        for step in failing_program.steps
+    ]
+    failing_program = failing_program.model_copy(update={"steps": failing_steps})
+    mapping_result = SimpleNamespace(
+        candidates=[
+            _mapping_candidate_record(0, failing_program, source_schema, target_schema),
+        ]
+    )
+
+    selected, selection = module._select_mapping_candidate(
+        mapping_result,
+        source_schema=source_schema,
+        target_schema=target_schema,
+        smoke_scenarios=_static_smoke_scenarios(module),
+    )
+
+    repaired_tags_step = next(step for step in selected.steps if step.id == "default_tags")
+    repair_report = selection["repair_report"]
+    assert selection["selection_mode"] == "runtime_smoke_repaired_candidate"
+    assert repaired_tags_step.operation.kind == "default"
+    assert repaired_tags_step.operation.source_ref == "src_tags"
+    assert repaired_tags_step.operation.value == []
+    assert repair_report["post_repair_smoke_score"]["execution_success_rate"] == 1.0
+    assert repair_report["rewritten_locations"] == [
+        {
+            "kind": "default_optional_list_target",
+            "location": "steps.default_tags.operation",
+            "before": {
+                "kind": "copy",
+                "source_ref": "src_tags",
+                "source_refs": [],
+                "step_refs": [],
+                "child_keys": {},
+                "to_type": None,
+                "mapping": {},
+                "from_unit": None,
+                "to_unit": None,
+                "factor": None,
+                "delimiter": None,
+                "child_path": None,
+                "expression": None,
+                "value": None,
+                "predicate": None,
+                "message": None,
+            },
+            "after": {
+                "kind": "default",
+                "source_ref": "src_tags",
+                "source_refs": [],
+                "step_refs": [],
+                "child_keys": {},
+                "to_type": None,
+                "mapping": {},
+                "from_unit": None,
+                "to_unit": None,
+                "factor": None,
+                "delimiter": None,
+                "child_path": None,
+                "expression": None,
+                "value": [],
+                "predicate": None,
+                "message": None,
+            },
+        }
+    ]
+
+
+def test_runtime_smoke_repair_rewrites_coalesce_expression_alias() -> None:
+    """Verify deterministic repair rewrites a supported fallback helper alias."""
+
+    module = _load_example_module()
+    target_schema = build_target_schema_card(module.SyntheticBenchmarkTask)
+    source_schema = _static_source_schema()
+    program = _static_mapping_ir()
+    rewritten_steps = [
+        step.model_copy(
+            update={
+                "operation": step.operation.model_copy(
+                    update={
+                        "expression": "coalesce(src_status, src_status_label, src_status_nested)",
+                    }
+                )
+            }
+        )
+        if step.id == "derive_status"
+        else step
+        for step in program.steps
+    ]
+    program = program.model_copy(update={"steps": rewritten_steps})
+
+    repaired_program, rewrites = module._apply_runtime_smoke_repairs(
+        program,
+        target_schema=target_schema,
+    )
+    validation = MappingIRValidator().validate(
+        repaired_program,
+        source_schema=source_schema,
+        target_schema=target_schema,
+    )
+
+    repaired_status_step = next(step for step in repaired_program.steps if step.id == "derive_status")
+    assert validation.valid is True
+    assert repaired_status_step.operation.expression == (
+        "first_non_null(src_status, src_status_label, src_status_nested)"
+    )
+    assert rewrites == [
+        {
+            "kind": "rewrite_expression_helper",
+            "location": "steps.derive_status.operation.expression",
+            "before": "coalesce(src_status, src_status_label, src_status_nested)",
+            "after": "first_non_null(src_status, src_status_label, src_status_nested)",
+        }
+    ]
+
+
 def test_repair_mapping_candidate_recovers_copy_prefixed_assignment_refs() -> None:
     """Verify that repair recovers assignment refs like ``copy_task_id``."""
 

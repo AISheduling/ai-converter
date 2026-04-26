@@ -6,6 +6,7 @@ import argparse
 import copy
 import json
 import re
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean
@@ -1334,6 +1335,7 @@ def _select_mapping_candidate(
     source_schema: SourceSchemaSpec,
     target_schema: TargetSchemaCard,
     smoke_scenarios: Sequence[BenchmarkScenario] | None = None,
+    repair_budget: int = MAPPING_REPAIR_BUDGET,
 ) -> tuple[MappingIR, dict[str, Any]]:
     """Pick the best valid mapping candidate using runtime smoke evidence.
 
@@ -1343,6 +1345,8 @@ def _select_mapping_candidate(
         target_schema: Canonical target schema card.
         smoke_scenarios: Optional benchmark scenarios used for deterministic
             compile/runtime candidate smoke ranking.
+        repair_budget: Maximum deterministic repair attempts for smoke-failed
+            validator-valid candidates.
 
     Returns:
         Tuple of selected mapping IR and machine-readable selection report.
@@ -1375,17 +1379,61 @@ def _select_mapping_candidate(
             )
 
     if scored_candidates:
+        repair_budget_consumed = 0
+        repair_reports: list[dict[str, Any]] = []
+        repaired_candidates: list[tuple[Any, MappingIR, dict[str, Any], dict[str, Any]]] = []
+        for candidate, score in scored_candidates:
+            if repair_budget_consumed >= repair_budget:
+                break
+            if not _mapping_smoke_score_needs_repair(score):
+                continue
+            repair_budget_consumed += 1
+            repaired_candidate, repair_report = _repair_runtime_smoke_candidate(
+                candidate.ranked.candidate,
+                candidate_index=candidate.index,
+                source_schema=source_schema,
+                target_schema=target_schema,
+                smoke_scenarios=smoke_subset,
+                original_score=score,
+                repair_budget_configured=repair_budget,
+                repair_budget_consumed=repair_budget_consumed,
+            )
+            repair_reports.append(repair_report)
+            post_repair_score = repair_report.get("post_repair_smoke_score")
+            if (
+                repair_report["repair_applied"]
+                and repair_report["post_repair_validation"]["valid"]
+                and post_repair_score is not None
+                and post_repair_score["smoke_passed"]
+            ):
+                repaired_candidates.append(
+                    (candidate, repaired_candidate, post_repair_score, repair_report)
+                )
+
         passing_candidates = [
-            (candidate, score)
+            (candidate, candidate.ranked.candidate, score, None)
             for candidate, score in scored_candidates
             if score["smoke_passed"]
         ]
+        passing_candidates.extend(repaired_candidates)
         candidate_scores = [score for _, score in scored_candidates]
         if passing_candidates:
-            selected_candidate, selected_score = max(
+            selected_candidate, selected_program, selected_score, selected_repair_report = max(
                 passing_candidates,
-                key=lambda item: _mapping_smoke_selection_key(item[1], item[0]),
+                key=lambda item: _mapping_smoke_selection_key(item[2], item[0]),
             )
+            if selected_repair_report is not None:
+                return selected_program, {
+                    "selected_candidate_index": selected_candidate.index,
+                    "selection_mode": "runtime_smoke_repaired_candidate",
+                    "repair_applied": True,
+                    "initial_validation": selected_candidate.ranked.validation.model_dump(mode="json"),
+                    "validation_summary": selected_score["validation_summary"],
+                    "smoke_score": selected_score["smoke_score"],
+                    "candidate_scores": candidate_scores,
+                    "repair_report": selected_repair_report,
+                    "repair_reports": repair_reports,
+                }
             return selected_candidate.ranked.candidate, {
                 "selected_candidate_index": selected_candidate.index,
                 "selection_mode": "runtime_smoke_ranked_candidate",
@@ -1394,6 +1442,7 @@ def _select_mapping_candidate(
                 "validation_summary": selected_score["validation_summary"],
                 "smoke_score": selected_score["smoke_score"],
                 "candidate_scores": candidate_scores,
+                "repair_reports": repair_reports,
             }
 
         detail = "; ".join(
@@ -1614,6 +1663,272 @@ def _score_mapping_candidate_smoke(
         }
     )
     return report
+
+
+def _mapping_smoke_score_needs_repair(score: dict[str, Any]) -> bool:
+    """Return whether a smoke score has a narrow repair-worthy failure signal."""
+
+    return (
+        not bool(score.get("compile_success"))
+        or int(score.get("runtime_error_count", 0)) > 0
+        or float(score.get("execution_success_rate", 0.0)) < 1.0
+        or float(score.get("structural_validity_rate", 0.0)) < 1.0
+        or float(score.get("required_field_accuracy", 0.0)) < 1.0
+    )
+
+
+def _repair_runtime_smoke_candidate(
+    mapping_ir: MappingIR,
+    *,
+    candidate_index: int,
+    source_schema: SourceSchemaSpec,
+    target_schema: TargetSchemaCard,
+    smoke_scenarios: Sequence[BenchmarkScenario],
+    original_score: dict[str, Any],
+    repair_budget_configured: int,
+    repair_budget_consumed: int,
+) -> tuple[MappingIR, dict[str, Any]]:
+    """Apply deterministic repairs to a candidate that failed smoke evidence."""
+
+    structurally_repaired, structural_report = _repair_mapping_candidate(
+        mapping_ir,
+        source_schema=source_schema,
+    )
+    repaired_candidate, runtime_rewrites = _apply_runtime_smoke_repairs(
+        structurally_repaired,
+        target_schema=target_schema,
+    )
+    rewritten_locations = [
+        *structural_report.get("rewritten_references", []),
+        *runtime_rewrites,
+    ]
+    validation = MappingIRValidator().validate(
+        repaired_candidate,
+        source_schema=source_schema,
+        target_schema=target_schema,
+    )
+    post_repair_score = None
+    if validation.valid:
+        post_repair_score = _score_mapping_candidate_smoke(
+            repaired_candidate,
+            candidate_index=candidate_index,
+            validation=validation,
+            smoke_scenarios=smoke_scenarios,
+        )
+    repair_applied = bool(
+        rewritten_locations
+        or structural_report.get("added_source_refs")
+        or structural_report.get("added_steps")
+    )
+    repair_report = {
+        "repair_attempted": True,
+        "repair_applied": repair_applied,
+        "repair_budget": {
+            "configured": repair_budget_configured,
+            "consumed": repair_budget_consumed,
+        },
+        "original_error": _mapping_smoke_original_error(original_score),
+        "rewritten_locations": rewritten_locations,
+        "structural_repair_report": structural_report,
+        "post_repair_validation": validation.model_dump(mode="json"),
+        "post_repair_smoke_score": post_repair_score,
+    }
+    return repaired_candidate, repair_report
+
+
+def _mapping_smoke_original_error(score: dict[str, Any]) -> dict[str, Any]:
+    """Build a compact original smoke-failure diagnostic for repair reports."""
+
+    return {
+        "compile_error": score.get("compile_error"),
+        "runtime_errors": score.get("runtime_errors", {}),
+        "execution_success_rate": score.get("execution_success_rate", 0.0),
+        "structural_validity_rate": score.get("structural_validity_rate", 0.0),
+        "required_field_accuracy": score.get("required_field_accuracy", 0.0),
+        "smoke_score": score.get("smoke_score", 0.0),
+    }
+
+
+def _apply_runtime_smoke_repairs(
+    mapping_ir: MappingIR,
+    *,
+    target_schema: TargetSchemaCard,
+) -> tuple[MappingIR, list[dict[str, Any]]]:
+    """Apply known deterministic repairs for smoke-failed MappingIR programs."""
+
+    repaired, expression_rewrites = _rewrite_expression_helper_aliases(mapping_ir)
+    repaired, precondition_rewrites = _remove_status_surface_preconditions(repaired)
+    repaired, list_default_rewrites = _default_optional_list_targets(
+        repaired,
+        target_schema=target_schema,
+    )
+    return repaired, [
+        *expression_rewrites,
+        *precondition_rewrites,
+        *list_default_rewrites,
+    ]
+
+
+def _rewrite_expression_helper_aliases(mapping_ir: MappingIR) -> tuple[MappingIR, list[dict[str, Any]]]:
+    """Rewrite supported fallback helper aliases inside derive expressions."""
+
+    rewrites: list[dict[str, Any]] = []
+    rewritten_steps: list[MappingStep] = []
+    for step in mapping_ir.steps:
+        expression = step.operation.expression
+        if step.operation.kind == "derive" and expression is not None:
+            rewritten_expression = re.sub(r"\bcoalesce\s*\(", "first_non_null(", expression)
+            if rewritten_expression != expression:
+                rewrites.append(
+                    {
+                        "kind": "rewrite_expression_helper",
+                        "location": f"steps.{step.id}.operation.expression",
+                        "before": expression,
+                        "after": rewritten_expression,
+                    }
+                )
+                rewritten_steps.append(
+                    step.model_copy(
+                        update={
+                            "operation": step.operation.model_copy(
+                                update={"expression": rewritten_expression}
+                            )
+                        }
+                    )
+                )
+                continue
+        rewritten_steps.append(step)
+    if not rewrites:
+        return mapping_ir, []
+    return mapping_ir.model_copy(update={"steps": rewritten_steps}), rewrites
+
+
+def _remove_status_surface_preconditions(mapping_ir: MappingIR) -> tuple[MappingIR, list[dict[str, Any]]]:
+    """Remove preconditions that over-constrain one source of a status fallback."""
+
+    status_source_refs = _multi_surface_status_source_refs(mapping_ir)
+    if not status_source_refs:
+        return mapping_ir, []
+
+    rewritten_preconditions: list[ConditionClause] = []
+    rewrites: list[dict[str, Any]] = []
+    for index, condition in enumerate(mapping_ir.preconditions):
+        if condition.ref in status_source_refs:
+            rewrites.append(
+                {
+                    "kind": "remove_status_surface_precondition",
+                    "location": f"preconditions[{index}]",
+                    "before": condition.model_dump(mode="json"),
+                    "after": None,
+                }
+            )
+            continue
+        rewritten_preconditions.append(condition)
+
+    if not rewrites:
+        return mapping_ir, []
+    return mapping_ir.model_copy(update={"preconditions": rewritten_preconditions}), rewrites
+
+
+def _multi_surface_status_source_refs(mapping_ir: MappingIR) -> set[str]:
+    """Return source refs used by a multi-source status derive assignment."""
+
+    step_by_id = {step.id: step for step in mapping_ir.steps}
+    status_refs: set[str] = set()
+    for assignment in mapping_ir.assignments:
+        if assignment.target_path != "status":
+            continue
+        step = step_by_id.get(assignment.step_id)
+        if step is None or step.operation.kind != "derive":
+            continue
+        source_refs = list(step.operation.source_refs)
+        if step.operation.source_ref is not None:
+            source_refs.insert(0, step.operation.source_ref)
+        if len(source_refs) > 1:
+            status_refs.update(source_refs)
+    return status_refs
+
+
+def _default_optional_list_targets(
+    mapping_ir: MappingIR,
+    *,
+    target_schema: TargetSchemaCard,
+) -> tuple[MappingIR, list[dict[str, Any]]]:
+    """Wrap optional list target copies in a deterministic empty-list default."""
+
+    target_fields = _target_fields_by_path(target_schema)
+    source_refs_by_id = {source_ref.id: source_ref for source_ref in mapping_ir.source_refs}
+    assignment_count_by_step_id = Counter(assignment.step_id for assignment in mapping_ir.assignments)
+    list_default_step_ids = {
+        assignment.step_id
+        for assignment in mapping_ir.assignments
+        if assignment_count_by_step_id[assignment.step_id] == 1
+        and _target_field_has_empty_list_default(target_fields.get(assignment.target_path))
+    }
+    if not list_default_step_ids:
+        return mapping_ir, []
+
+    rewrites: list[dict[str, Any]] = []
+    rewritten_steps: list[MappingStep] = []
+    for step in mapping_ir.steps:
+        if step.id not in list_default_step_ids:
+            rewritten_steps.append(step)
+            continue
+        operation = step.operation
+        source_ref = operation.source_ref
+        if (
+            operation.kind not in {"copy", "rename"}
+            or source_ref is None
+            or source_refs_by_id.get(source_ref) is None
+            or source_refs_by_id[source_ref].cardinality != "many"
+        ):
+            rewritten_steps.append(step)
+            continue
+        rewritten_operation = StepOperation(
+            kind="default",
+            source_ref=source_ref,
+            value=[],
+        )
+        rewrites.append(
+            {
+                "kind": "default_optional_list_target",
+                "location": f"steps.{step.id}.operation",
+                "before": operation.model_dump(mode="json"),
+                "after": rewritten_operation.model_dump(mode="json"),
+            }
+        )
+        rewritten_steps.append(
+            step.model_copy(update={"operation": rewritten_operation})
+        )
+    if not rewrites:
+        return mapping_ir, []
+    return mapping_ir.model_copy(update={"steps": rewritten_steps}), rewrites
+
+
+def _target_fields_by_path(target_schema: TargetSchemaCard) -> dict[str, Any]:
+    """Index target schema fields recursively by path."""
+
+    fields_by_path: dict[str, Any] = {}
+
+    def visit(field: Any) -> None:
+        fields_by_path[field.path] = field
+        for child in field.children:
+            visit(child)
+
+    for field in target_schema.fields:
+        visit(field)
+    return fields_by_path
+
+
+def _target_field_has_empty_list_default(field: Any | None) -> bool:
+    """Return whether a target field is an optional list with an empty default."""
+
+    if field is None:
+        return False
+    return (
+        str(field.type_label).startswith("list")
+        and field.default in ([], "[]")
+    )
 
 
 def _mapping_smoke_selection_key(score: dict[str, Any], candidate: Any) -> tuple[float, float, float, float, float]:
