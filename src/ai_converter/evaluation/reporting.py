@@ -11,11 +11,13 @@ from .aggregation import (
     BenchmarkExperimentMetricRow,
     BenchmarkExperimentSummary,
     build_benchmark_boxplot_rows,
+    build_benchmark_runtime_error_summaries,
     build_benchmark_telemetry_boxplot_rows,
     summarize_benchmark_experiment,
     summarize_benchmark_telemetry,
 )
-from .benchmark import BenchmarkExperimentResult, BenchmarkRunResult
+from .benchmark import BenchmarkExperimentResult, BenchmarkExperimentRun, BenchmarkRunResult
+from .metrics import BenchmarkRuntimeErrorSummary
 
 _TIMING_FIELD_NAMES = frozenset({"preparation_seconds", "runtime_seconds"})
 
@@ -299,6 +301,7 @@ def render_benchmark_markdown(result: BenchmarkRunResult) -> str:
                 f"{metrics.coverage:.3f} |"
             )
         lines.append("")
+    _append_why_failed_section(lines, _runtime_error_summaries_for_run(result))
     return "\n".join(lines)
 
 
@@ -340,6 +343,14 @@ def render_benchmark_experiment_markdown(
             f"{artifacts.get('telemetry', '-')} |"
         )
     lines.append("")
+    _append_why_failed_section(
+        lines,
+        (
+            summary.runtime_error_summaries
+            if summary is not None
+            else build_benchmark_runtime_error_summaries(result)
+        ),
+    )
     _append_summary_section(
         lines,
         title="Scenario Summary",
@@ -702,6 +713,53 @@ def _strip_timing_fields(value: Any) -> Any:
     if isinstance(value, list):
         return [_strip_timing_fields(item) for item in value]
     return value
+
+
+def _runtime_error_summaries_for_run(
+    result: BenchmarkRunResult,
+) -> list[BenchmarkRuntimeErrorSummary]:
+    """Build runtime error summaries for a single benchmark run."""
+
+    experiment = BenchmarkExperimentResult(
+        runs=[
+            BenchmarkExperimentRun(
+                run_id="run-001",
+                result=result,
+            )
+        ]
+    )
+    return build_benchmark_runtime_error_summaries(experiment)
+
+
+def _append_why_failed_section(
+    lines: list[str],
+    runtime_error_summaries: list[BenchmarkRuntimeErrorSummary],
+) -> None:
+    """Append compact runtime diagnostics when a report has failures."""
+
+    if not runtime_error_summaries:
+        return
+    lines.append("## Why Failed")
+    lines.append("")
+    lines.append("| Scenario / Subject | Dataset | Count | Top Error |")
+    lines.append("| --- | --- | ---: | --- |")
+    for error_summary in runtime_error_summaries[:10]:
+        label = f"{error_summary.scenario_name} / {error_summary.subject_name}"
+        dataset = error_summary.dataset_id or "-"
+        lines.append(
+            "| "
+            f"{_markdown_table_cell(label)} | "
+            f"{_markdown_table_cell(dataset)} | "
+            f"{error_summary.count} | "
+            f"{_markdown_table_cell(error_summary.message)} |"
+        )
+    lines.append("")
+
+
+def _markdown_table_cell(value: str) -> str:
+    """Escape compact Markdown table cells."""
+
+    return value.replace("\n", " ").replace("|", "\\|")
 
 
 def _select_summary_rows(

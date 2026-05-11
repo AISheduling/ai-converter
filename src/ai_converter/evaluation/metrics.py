@@ -28,6 +28,11 @@ class BenchmarkStageArtifacts(BaseModel):
     """Optional stage-wise signals attached to aggregate benchmark metrics.
 
     Attributes:
+        parse_success: Whether upstream source/schema parsing succeeded.
+        mapping_validation_success: Whether MappingIR validation succeeded.
+        compile_success: Whether converter compilation succeeded.
+        smoke_execution_success_rate: Runtime-smoke execution success rate.
+        benchmark_execution_success_rate: Benchmark execution success rate.
         build_success: Whether subject preparation completed successfully.
         execution_success_rate: Fraction of benchmark cases that executed.
         runtime_validity_rate: Fraction of cases that passed the end-to-end runtime path.
@@ -40,6 +45,11 @@ class BenchmarkStageArtifacts(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    parse_success: bool | None = None
+    mapping_validation_success: bool | None = None
+    compile_success: bool | None = None
+    smoke_execution_success_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    benchmark_execution_success_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     build_success: bool | None = None
     execution_success_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     runtime_validity_rate: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -64,6 +74,28 @@ class BenchmarkMetrics(BaseModel):
     preparation_seconds: float = Field(ge=0.0, exclude=True)
     runtime_seconds: float = Field(ge=0.0, exclude=True)
     stage_metrics: BenchmarkStageArtifacts | None = None
+
+
+class BenchmarkRuntimeErrorSummary(BaseModel):
+    """Grouped runtime error diagnostic for benchmark reports."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scenario_name: str
+    subject_name: str
+    subject_kind: str
+    message: str
+    error_category: str
+    count: int = Field(ge=1)
+    case_names: list[str] = Field(default_factory=list)
+    bundle_kind: str | None = None
+    dataset_id: str | None = None
+    template_id: str | None = None
+    drift_id: str | None = None
+    drift_type: str | None = None
+    severity: str | None = None
+    compatibility_class: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 def compute_case_accuracy(
@@ -187,6 +219,7 @@ def build_stage_metrics(
     payload: dict[str, Any] = {
         "build_success": prepare_succeeded,
         "execution_success_rate": execution_success_rate,
+        "benchmark_execution_success_rate": execution_success_rate,
         "runtime_validity_rate": (
             acceptance_report.coverage
             if acceptance_report is not None

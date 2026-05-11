@@ -482,6 +482,91 @@ def test_reporting_exports_boxplot_ready_tables_without_breaking_canonical_repor
         shutil.rmtree(output_dir, ignore_errors=True)
 
 
+def test_reporting_exports_quality_diagnostics_for_failing_runs() -> None:
+    """Verify failed runs explain low pass@1 without timing leakage."""
+
+    base_bundle, _ = _build_synthetic_bundles()
+
+    def _broken_converter(_record: dict[str, object]) -> dict[str, object]:
+        raise RuntimeError("status transform exploded")
+
+    subject = BenchmarkSubject.from_converter(
+        "broken-model",
+        _broken_converter,
+        kind="compiled",
+        stage_artifacts=BenchmarkStageArtifacts(
+            parse_success=True,
+            mapping_validation_success=True,
+            compile_success=True,
+            smoke_execution_success_rate=0.5,
+            artifacts={
+                "selected_candidate_index": 2,
+                "selection_mode": "runtime_smoke_ranked_candidate",
+                "repair_applied": False,
+                "fallback_used": False,
+            },
+        ),
+    )
+    scenario = build_synthetic_benchmark_scenario(
+        "synthetic-base",
+        [base_bundle],
+        target_model=SyntheticTarget,
+        required_fields=["tasks"],
+    )
+    repeated = run_repeated_benchmark(
+        [subject],
+        [scenario],
+        run_count=2,
+        experiment_name="failing-quality-diagnostics",
+    )
+
+    output_dir = RAW_ROOT / "quality-diagnostics-output"
+    shutil.rmtree(output_dir, ignore_errors=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        paths = export_benchmark_experiment_reports(
+            repeated,
+            output_dir,
+            stem="synthetic_benchmark",
+            include_telemetry=True,
+        )
+
+        summary_payload = json.loads(paths["summary_json"].read_text(encoding="utf-8"))
+        _assert_timing_fields_absent(summary_payload)
+        error_summary = summary_payload["runtime_error_summaries"][0]
+        assert error_summary["scenario_name"] == "synthetic-base"
+        assert error_summary["subject_name"] == "broken-model"
+        assert error_summary["dataset_id"] == "synthetic-demo"
+        assert error_summary["bundle_kind"] == "base"
+        assert error_summary["message"] == "status transform exploded"
+        assert error_summary["count"] == 2
+
+        metric_names = {
+            row["metric_name"]
+            for row in summary_payload["summary_rows"]
+            if row["group_type"] == "scenario_subject"
+        }
+        assert "pass_at_1" in metric_names
+        assert "stage.parse_success" in metric_names
+        assert "stage.mapping_validation_success" in metric_names
+        assert "stage.compile_success" in metric_names
+        assert "stage.smoke_execution_success_rate" in metric_names
+        assert "stage.benchmark_execution_success_rate" in metric_names
+        assert "stage.structural_validity_rate" in metric_names
+        assert "stage.semantic_validity_rate" in metric_names
+
+        experiment_payload = json.loads(paths["experiment_json"].read_text(encoding="utf-8"))
+        _assert_timing_fields_absent(experiment_payload)
+
+        markdown = paths["experiment_markdown"].read_text(encoding="utf-8")
+        assert "## Why Failed" in markdown
+        assert "synthetic-base / broken-model" in markdown
+        assert "status transform exploded" in markdown
+    finally:
+        shutil.rmtree(output_dir, ignore_errors=True)
+
+
 def test_repeated_run_exports_use_grouped_layout_and_per_run_artifacts() -> None:
     """Verify that repeated benchmark exports keep per-run artifacts deterministic."""
 

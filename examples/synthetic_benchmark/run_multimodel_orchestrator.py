@@ -20,6 +20,7 @@ from ai_converter.evaluation import (
     BenchmarkScenario,
     BenchmarkStageArtifacts,
     BenchmarkSubject,
+    build_benchmark_runtime_error_summaries,
     export_benchmark_experiment_reports,
     run_repeated_benchmark,
 )
@@ -677,6 +678,7 @@ def _run_converter_generation(
         module_name=f"{dataset.dataset_name}_{endpoint.name}_converter",
     )
     export = package.export(output_dir / "converter_package")
+    selected_smoke_score = _selected_mapping_smoke_score(mapping_selection)
 
     experiment = run_repeated_benchmark(
         [
@@ -685,11 +687,21 @@ def _run_converter_generation(
                 package,
                 kind="compiled",
                 stage_artifacts=BenchmarkStageArtifacts(
+                    parse_success=True,
+                    mapping_validation_success=mapping_validation.valid,
+                    compile_success=True,
+                    smoke_execution_success_rate=_optional_rate(
+                        selected_smoke_score.get("execution_success_rate")
+                    ),
                     source_structure_recovery=1.0,
                     mapping_quality=1.0 if mapping_validation.valid else 0.0,
                     artifacts={
                         "dataset_name": dataset.dataset_name,
                         "model": endpoint.model,
+                        "selected_candidate_index": mapping_selection["selected_candidate_index"],
+                        "selection_mode": mapping_selection["selection_mode"],
+                        "repair_applied": bool(mapping_selection.get("repair_applied")),
+                        "fallback_used": bool(mapping_selection.get("fallback_used")),
                         "source_schema_path": str(output_dir / "source_schema.json"),
                         "mapping_ir_path": str(output_dir / "mapping_ir.json"),
                     },
@@ -707,6 +719,7 @@ def _run_converter_generation(
         include_telemetry=True,
     )
     benchmark_metrics = _summarize_benchmark_experiment(experiment)
+    benchmark_diagnostics = _build_benchmark_diagnostics(experiment)
 
     summary = {
         "dataset_name": dataset.dataset_name,
@@ -734,6 +747,7 @@ def _run_converter_generation(
         ),
         "mapping_candidate_count": len(mapping_result.candidates),
         "selected_mapping_candidate_index": mapping_selection["selected_candidate_index"],
+        "mapping_selection_mode": mapping_selection["selection_mode"],
         "mapping_repair_applied": bool(mapping_selection.get("repair_applied")),
         "mapping_fallback_used": bool(mapping_selection.get("fallback_used")),
         "mapping_validation": mapping_validation.model_dump(mode="json"),
@@ -747,6 +761,7 @@ def _run_converter_generation(
             else None
         ),
         "benchmark_metrics": benchmark_metrics,
+        "benchmark_diagnostics": benchmark_diagnostics,
     }
     summary_path = output_dir / "summary.json"
     _write_json(summary_path, summary)
@@ -2335,6 +2350,69 @@ def _runtime_error_counts(case_results: Sequence[Any]) -> dict[str, int]:
             continue
         counts[case_result.error] = counts.get(case_result.error, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def _selected_mapping_smoke_score(mapping_selection: Mapping[str, Any]) -> dict[str, Any]:
+    """Return smoke diagnostics for the selected mapping candidate."""
+
+    if mapping_selection.get("fallback_used") and isinstance(mapping_selection.get("fallback_score"), dict):
+        return dict(mapping_selection["fallback_score"])
+
+    repair_report = mapping_selection.get("repair_report")
+    if isinstance(repair_report, dict) and isinstance(
+        repair_report.get("post_repair_smoke_score"),
+        dict,
+    ):
+        return dict(repair_report["post_repair_smoke_score"])
+
+    selected_index = mapping_selection.get("selected_candidate_index")
+    for score in mapping_selection.get("candidate_scores", []):
+        if isinstance(score, dict) and score.get("candidate_index") == selected_index:
+            return dict(score)
+    return {}
+
+
+def _optional_rate(value: Any) -> float | None:
+    """Return a float rate when a diagnostic value is numeric."""
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _build_benchmark_diagnostics(experiment: Any) -> dict[str, Any]:
+    """Build compact diagnostics for one orchestrator converter run."""
+
+    runtime_error_summaries = [
+        item.model_dump(mode="json")
+        for item in build_benchmark_runtime_error_summaries(experiment)
+    ]
+    error_counts: Counter[str] = Counter()
+    for item in runtime_error_summaries:
+        error_counts[item["message"]] += item["count"]
+    return {
+        "stage": _first_stage_metrics_payload(experiment),
+        "runtime_error_summaries": runtime_error_summaries,
+        "top_runtime_errors": [
+            {"message": message, "count": count}
+            for message, count in sorted(
+                error_counts.items(),
+                key=lambda item: (-item[1], item[0]),
+            )
+        ],
+    }
+
+
+def _first_stage_metrics_payload(experiment: Any) -> dict[str, Any]:
+    """Return the first stage-metrics payload from an experiment."""
+
+    for run in experiment.runs:
+        for scenario_result in run.result.scenario_results:
+            for subject_result in scenario_result.subject_results:
+                stage_metrics = subject_result.metrics.stage_metrics
+                if stage_metrics is not None:
+                    return stage_metrics.model_dump(mode="json", exclude_none=True)
+    return {}
 
 
 def _copy_benchmark_case(case: BenchmarkCase) -> BenchmarkCase:

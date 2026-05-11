@@ -11,7 +11,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from .benchmark import BenchmarkCaseResult, BenchmarkExperimentResult, BenchmarkSubjectResult
-from .metrics import compute_macro_micro_accuracy, compute_required_field_accuracy
+from .metrics import (
+    BenchmarkRuntimeErrorSummary,
+    compute_macro_micro_accuracy,
+    compute_required_field_accuracy,
+)
 
 
 class BenchmarkMetricSummaryStats(BaseModel):
@@ -84,6 +88,7 @@ class BenchmarkExperimentSummary(BaseModel):
     experiment_name: str | None = None
     run_count: int = Field(ge=0)
     summary_rows: list[BenchmarkExperimentSummaryRow] = Field(default_factory=list)
+    runtime_error_summaries: list[BenchmarkRuntimeErrorSummary] = Field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -227,10 +232,87 @@ def summarize_benchmark_experiment(
     """
 
     rows = build_benchmark_boxplot_rows(result)
-    return summarize_benchmark_metric_rows(
+    summary = summarize_benchmark_metric_rows(
         rows,
         experiment_name=result.experiment_name,
         run_count=len(result.runs),
+    )
+    return summary.model_copy(
+        update={
+            "runtime_error_summaries": build_benchmark_runtime_error_summaries(result)
+        }
+    )
+
+
+def build_benchmark_runtime_error_summaries(
+    result: BenchmarkExperimentResult,
+) -> list[BenchmarkRuntimeErrorSummary]:
+    """Build grouped runtime error diagnostics for repeated benchmark runs."""
+
+    grouped: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for run in result.runs:
+        for scenario_result in run.result.scenario_results:
+            for subject_result in scenario_result.subject_results:
+                for case_result in subject_result.case_results:
+                    if not case_result.error:
+                        continue
+                    dimensions = _build_dimensions_from_tags(case_result.tags)
+                    message = _normalize_error_message(case_result.error)
+                    key = (
+                        scenario_result.scenario_name,
+                        subject_result.subject_name,
+                        subject_result.subject_kind,
+                        dimensions.bundle_kind,
+                        dimensions.dataset_id,
+                        dimensions.template_id,
+                        dimensions.drift_id,
+                        dimensions.drift_type,
+                        dimensions.severity,
+                        dimensions.compatibility_class,
+                        tuple(dimensions.tags),
+                        message,
+                    )
+                    entry = grouped.setdefault(
+                        key,
+                        {
+                            "scenario_name": scenario_result.scenario_name,
+                            "subject_name": subject_result.subject_name,
+                            "subject_kind": subject_result.subject_kind,
+                            "bundle_kind": dimensions.bundle_kind,
+                            "dataset_id": dimensions.dataset_id,
+                            "template_id": dimensions.template_id,
+                            "drift_id": dimensions.drift_id,
+                            "drift_type": dimensions.drift_type,
+                            "severity": dimensions.severity,
+                            "compatibility_class": dimensions.compatibility_class,
+                            "tags": list(dimensions.tags),
+                            "message": message,
+                            "error_category": message,
+                            "count": 0,
+                            "case_names": set(),
+                        },
+                    )
+                    entry["count"] += 1
+                    entry["case_names"].add(case_result.name)
+
+    summaries = [
+        BenchmarkRuntimeErrorSummary(
+            **{
+                **entry,
+                "case_names": sorted(entry["case_names"]),
+            }
+        )
+        for entry in grouped.values()
+    ]
+    return sorted(
+        summaries,
+        key=lambda item: (
+            item.scenario_name,
+            item.subject_name,
+            item.bundle_kind or "",
+            -(item.count),
+            item.message,
+        ),
     )
 
 
@@ -684,8 +766,23 @@ def _build_observation_stage_metrics(
             True if existing is None or existing.build_success is None else existing.build_success
         ),
         "stage.execution_success_rate": execution_success_rate,
+        "stage.benchmark_execution_success_rate": (
+            execution_success_rate
+            if existing is None or existing.benchmark_execution_success_rate is None
+            else existing.benchmark_execution_success_rate
+        ),
         "stage.runtime_validity_rate": runtime_validity_rate,
     }
+    for field_name in (
+        "parse_success",
+        "mapping_validation_success",
+        "compile_success",
+    ):
+        value = None if existing is None else getattr(existing, field_name)
+        if value is not None:
+            payload[f"stage.{field_name}"] = float(value)
+    if existing is not None and existing.smoke_execution_success_rate is not None:
+        payload["stage.smoke_execution_success_rate"] = existing.smoke_execution_success_rate
     if structural_values:
         payload["stage.structural_validity_rate"] = mean(structural_values)
     if semantic_values:
@@ -707,6 +804,13 @@ def _is_runtime_valid(case_result: BenchmarkCaseResult) -> bool:
         and bool(case_result.structural_validity)
         and bool(case_result.semantic_validity)
     )
+
+
+def _normalize_error_message(message: str) -> str:
+    """Normalize one runtime error message for deterministic grouping."""
+
+    first_line = message.splitlines()[0].strip()
+    return first_line or "unknown runtime error"
 
 
 def _iter_sidecar_items(

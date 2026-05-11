@@ -163,6 +163,14 @@ def test_multimodel_orchestrator_runs_offline() -> None:
         assert mapping_selection["candidate_scores"]
         assert "smoke_score" in mapping_selection["candidate_scores"][0]
         assert "runtime_errors" in mapping_selection["candidate_scores"][0]
+        assert run["mapping_selection_mode"] == "runtime_smoke_ranked_candidate"
+        assert run["benchmark_diagnostics"]["runtime_error_summaries"] == []
+        assert run["benchmark_diagnostics"]["top_runtime_errors"] == []
+        assert run["benchmark_diagnostics"]["stage"]["parse_success"] is True
+        assert run["benchmark_diagnostics"]["stage"]["mapping_validation_success"] is True
+        assert run["benchmark_diagnostics"]["stage"]["compile_success"] is True
+        assert run["benchmark_diagnostics"]["stage"]["smoke_execution_success_rate"] == 1.0
+        assert run["benchmark_diagnostics"]["stage"]["benchmark_execution_success_rate"] == 1.0
         assert run["mapping_validation"]["valid"] is True
         assert run["benchmark_metrics"]["all_scenarios_passed"] is True
         assert run["benchmark_metrics"]["mean_pass_at_1"] == 1.0
