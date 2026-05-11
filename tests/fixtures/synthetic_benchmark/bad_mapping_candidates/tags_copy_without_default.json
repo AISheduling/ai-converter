@@ -1,0 +1,123 @@
+{
+  "version": "1.0",
+  "source_refs": [
+    {
+      "id": "src_task_id",
+      "path": "task_id",
+      "dtype": "str"
+    },
+    {
+      "id": "src_task_name",
+      "path": "task_name",
+      "dtype": "str"
+    },
+    {
+      "id": "src_status",
+      "path": "status_text",
+      "dtype": "str"
+    },
+    {
+      "id": "src_status_label",
+      "path": "status_text_label",
+      "dtype": "str"
+    },
+    {
+      "id": "src_status_nested",
+      "path": "status.details",
+      "dtype": "str"
+    },
+    {
+      "id": "src_duration",
+      "path": "duration_days",
+      "dtype": "int"
+    },
+    {
+      "id": "src_assignee",
+      "path": "assignee",
+      "dtype": "str"
+    },
+    {
+      "id": "src_tags",
+      "path": "tags",
+      "dtype": "list",
+      "cardinality": "many"
+    }
+  ],
+  "steps": [
+    {
+      "id": "copy_id",
+      "operation": {
+        "kind": "copy",
+        "source_ref": "src_task_id"
+      }
+    },
+    {
+      "id": "copy_name",
+      "operation": {
+        "kind": "copy",
+        "source_ref": "src_task_name"
+      }
+    },
+    {
+      "id": "derive_status",
+      "operation": {
+        "kind": "derive",
+        "source_refs": [
+          "src_status",
+          "src_status_label",
+          "src_status_nested"
+        ],
+        "expression": "first_non_null(src_status, src_status_label, src_status_nested)"
+      }
+    },
+    {
+      "id": "copy_duration",
+      "operation": {
+        "kind": "copy",
+        "source_ref": "src_duration"
+      }
+    },
+    {
+      "id": "copy_assignee",
+      "operation": {
+        "kind": "copy",
+        "source_ref": "src_assignee"
+      }
+    },
+    {
+      "id": "copy_tags",
+      "operation": {
+        "kind": "copy",
+        "source_ref": "src_tags"
+      }
+    }
+  ],
+  "assignments": [
+    {
+      "step_id": "copy_id",
+      "target_path": "id"
+    },
+    {
+      "step_id": "copy_name",
+      "target_path": "name"
+    },
+    {
+      "step_id": "derive_status",
+      "target_path": "status"
+    },
+    {
+      "step_id": "copy_duration",
+      "target_path": "duration_days"
+    },
+    {
+      "step_id": "copy_assignee",
+      "target_path": "assignee",
+      "required": false
+    },
+    {
+      "step_id": "copy_tags",
+      "target_path": "tags",
+      "required": false
+    }
+  ]
+}

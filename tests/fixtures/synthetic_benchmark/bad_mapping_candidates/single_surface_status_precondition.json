@@ -1,0 +1,116 @@
+{
+  "version": "1.0",
+  "source_refs": [
+    {
+      "id": "src_task_id",
+      "path": "task_id",
+      "dtype": "str"
+    },
+    {
+      "id": "src_task_name",
+      "path": "task_name",
+      "dtype": "str"
+    },
+    {
+      "id": "src_status_nested",
+      "path": "status.details",
+      "dtype": "str"
+    },
+    {
+      "id": "src_duration",
+      "path": "duration_days",
+      "dtype": "int"
+    },
+    {
+      "id": "src_assignee",
+      "path": "assignee",
+      "dtype": "str"
+    },
+    {
+      "id": "src_tags",
+      "path": "tags",
+      "dtype": "list",
+      "cardinality": "many"
+    }
+  ],
+  "steps": [
+    {
+      "id": "copy_id",
+      "operation": {
+        "kind": "copy",
+        "source_ref": "src_task_id"
+      }
+    },
+    {
+      "id": "copy_name",
+      "operation": {
+        "kind": "copy",
+        "source_ref": "src_task_name"
+      }
+    },
+    {
+      "id": "copy_status",
+      "operation": {
+        "kind": "copy",
+        "source_ref": "src_status_nested"
+      }
+    },
+    {
+      "id": "copy_duration",
+      "operation": {
+        "kind": "copy",
+        "source_ref": "src_duration"
+      }
+    },
+    {
+      "id": "copy_assignee",
+      "operation": {
+        "kind": "copy",
+        "source_ref": "src_assignee"
+      }
+    },
+    {
+      "id": "default_tags",
+      "operation": {
+        "kind": "default",
+        "source_ref": "src_tags",
+        "value": []
+      }
+    }
+  ],
+  "assignments": [
+    {
+      "step_id": "copy_id",
+      "target_path": "id"
+    },
+    {
+      "step_id": "copy_name",
+      "target_path": "name"
+    },
+    {
+      "step_id": "copy_status",
+      "target_path": "status"
+    },
+    {
+      "step_id": "copy_duration",
+      "target_path": "duration_days"
+    },
+    {
+      "step_id": "copy_assignee",
+      "target_path": "assignee",
+      "required": false
+    },
+    {
+      "step_id": "default_tags",
+      "target_path": "tags",
+      "required": false
+    }
+  ],
+  "preconditions": [
+    {
+      "kind": "exists",
+      "ref": "src_status_nested",
+      "description": "Prefer nested status.details when present."
+    }
+  ]
+}

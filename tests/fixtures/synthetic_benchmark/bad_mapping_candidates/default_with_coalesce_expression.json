@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "source_refs": [
+    {
+      "id": "src_status_text",
+      "path": "status_text",
+      "dtype": "str"
+    }
+  ],
+  "steps": [
+    {
+      "id": "default_status",
+      "operation": {
+        "kind": "default",
+        "source_refs": [
+          "src_status_text"
+        ],
+        "expression": "coalesce(src_status_text)",
+        "value": null
+      }
+    }
+  ],
+  "assignments": [
+    {
+      "step_id": "default_status",
+      "target_path": "status"
+    }
+  ]
+}

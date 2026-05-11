@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 
+from ai_converter.compiler import compile_mapping_ir
 from ai_converter.evaluation import BenchmarkCase, BenchmarkScenario
 from ai_converter.mapping_ir import (
     ConditionClause,
@@ -28,6 +29,7 @@ from ai_converter.schema import SourceFieldSpec, SourceSchemaSpec, build_target_
 
 ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE_SCRIPT = ROOT / "examples" / "synthetic_benchmark" / "run_multimodel_orchestrator.py"
+BAD_MAPPING_FIXTURE_ROOT = ROOT / "tests" / "fixtures" / "synthetic_benchmark" / "bad_mapping_candidates"
 
 
 @dataclass(slots=True)
@@ -348,6 +350,80 @@ def test_select_mapping_candidate_uses_fallback_when_all_valid_candidates_fail_s
         "assignee",
         "tags",
     ]
+
+
+def test_candidate_smoke_ranking_penalizes_single_surface_status_precondition_fixture() -> None:
+    """Verify runtime smoke ranking catches the reduced status-precondition fixture."""
+
+    module = _load_example_module()
+    target_schema = build_target_schema_card(module.SyntheticBenchmarkTask)
+    source_schema = _static_source_schema()
+    failing_program = _load_bad_mapping_candidate("single_surface_status_precondition.json")
+    passing_program = _static_mapping_ir()
+    mapping_result = SimpleNamespace(
+        candidates=[
+            _mapping_candidate_record(0, failing_program, source_schema, target_schema),
+            _mapping_candidate_record(1, passing_program, source_schema, target_schema),
+        ]
+    )
+
+    selected, selection = module._select_mapping_candidate(
+        mapping_result,
+        source_schema=source_schema,
+        target_schema=target_schema,
+        smoke_scenarios=_static_smoke_scenarios(module),
+        repair_budget=0,
+    )
+
+    assert selected == passing_program
+    assert selection["selection_mode"] == "runtime_smoke_ranked_candidate"
+    assert selection["selected_candidate_index"] == 1
+    assert selection["candidate_scores"][0]["validation_summary"]["valid"] is True
+    assert selection["candidate_scores"][0]["smoke_passed"] is False
+    assert selection["candidate_scores"][0]["execution_success_rate"] < selection["candidate_scores"][1]["execution_success_rate"]
+    assert selection["candidate_scores"][0]["runtime_errors"] == {
+        "Prefer nested status.details when present.": 2
+    }
+
+
+def test_runtime_smoke_repair_defaults_missing_tags_to_empty_list_for_synthetic_task() -> None:
+    """Verify missing source tags are repaired to [] for SyntheticBenchmarkTask."""
+
+    module = _load_example_module()
+    target_schema = build_target_schema_card(module.SyntheticBenchmarkTask)
+    source_schema = _static_source_schema()
+    failing_program = _load_bad_mapping_candidate("tags_copy_without_default.json")
+    mapping_result = SimpleNamespace(
+        candidates=[
+            _mapping_candidate_record(0, failing_program, source_schema, target_schema),
+        ]
+    )
+
+    selected, selection = module._select_mapping_candidate(
+        mapping_result,
+        source_schema=source_schema,
+        target_schema=target_schema,
+        smoke_scenarios=_static_smoke_scenarios(module),
+    )
+    converter = compile_mapping_ir(
+        selected,
+        module_name="missing_tags_regression_converter",
+    )
+    converted = converter.convert(
+        {
+            "task_id": "TASK-4",
+            "task_name": "Missing tags row",
+            "status": {"details": "done"},
+            "duration_days": 1,
+            "assignee": "Lin",
+        }
+    )
+    target = module.SyntheticBenchmarkTask.model_validate(converted)
+
+    assert selection["selection_mode"] == "runtime_smoke_repaired_candidate"
+    assert selection["repair_report"]["rewritten_locations"][0]["kind"] == "default_optional_list_target"
+    assert converted["tags"] == []
+    assert target.tags == []
 
 
 def test_deterministic_fallback_candidate_passes_wrapped_dynamic_smoke() -> None:
@@ -676,6 +752,12 @@ def _load_example_module() -> ModuleType:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _load_bad_mapping_candidate(name: str) -> MappingIR:
+    """Load one reduced live bad-candidate regression fixture."""
+
+    return MappingIR.model_validate_json((BAD_MAPPING_FIXTURE_ROOT / name).read_text(encoding="utf-8"))
 
 
 def _fake_response(parsed_payload: Any) -> _FakeOpenAIResponse:

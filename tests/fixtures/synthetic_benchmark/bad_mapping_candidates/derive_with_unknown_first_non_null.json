@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "source_refs": [
+    {
+      "id": "src_status_text",
+      "path": "status_text",
+      "dtype": "str"
+    }
+  ],
+  "steps": [
+    {
+      "id": "derive_status",
+      "operation": {
+        "kind": "derive",
+        "source_refs": [
+          "src_status_text"
+        ],
+        "expression": "if_defined_then_use_first_non_null([src_status_text])"
+      }
+    }
+  ],
+  "assignments": [
+    {
+      "step_id": "derive_status",
+      "target_path": "status"
+    }
+  ]
+}
