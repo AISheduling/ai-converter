@@ -296,12 +296,13 @@ def test_select_mapping_candidate_smoke_ranks_runtime_failures() -> None:
     assert selection["candidate_scores"][1]["required_field_accuracy"] == 1.0
 
 
-def test_select_mapping_candidate_errors_when_all_valid_candidates_fail_smoke() -> None:
-    """Verify all-smoke-failing valid candidates produce a clear selection error."""
+def test_select_mapping_candidate_uses_fallback_when_all_valid_candidates_fail_smoke() -> None:
+    """Verify fallback is selected when every LLM candidate fails smoke."""
 
     module = _load_example_module()
     target_schema = build_target_schema_card(module.SyntheticBenchmarkTask)
     source_schema = _static_source_schema()
+    schema_coverage_report = module._build_schema_coverage_report(source_schema)
     failing_program = _static_mapping_ir().model_copy(
         update={
             "preconditions": [
@@ -320,16 +321,76 @@ def test_select_mapping_candidate_errors_when_all_valid_candidates_fail_smoke() 
         ]
     )
 
-    with pytest.raises(RuntimeError, match="none passed runtime smoke selection") as exc_info:
-        module._select_mapping_candidate(
-            mapping_result,
-            source_schema=source_schema,
-            target_schema=target_schema,
-            smoke_scenarios=_static_smoke_scenarios(module),
-        )
+    selected, selection = module._select_mapping_candidate(
+        mapping_result,
+        source_schema=source_schema,
+        schema_coverage_report=schema_coverage_report,
+        target_schema=target_schema,
+        smoke_scenarios=_static_smoke_scenarios(module),
+    )
 
-    assert "candidate 0" in str(exc_info.value)
-    assert "execution_success_rate=0.000" in str(exc_info.value)
+    assert selection["selection_mode"] == "runtime_smoke_fallback_candidate"
+    assert selection["fallback_used"] is True
+    assert selection["selected_candidate_index"] == module.DETERMINISTIC_FALLBACK_CANDIDATE_INDEX
+    assert selection["candidate_scores"][0]["candidate_index"] == 0
+    assert selection["candidate_scores"][0]["execution_success_rate"] == 0.0
+    assert selection["candidate_scores"][0]["runtime_errors"] == {
+        "force runtime smoke failure": 4
+    }
+    assert selection["fallback_score"]["execution_success_rate"] == 1.0
+    assert selection["fallback_score"]["required_field_accuracy"] == 1.0
+    assert selection["fallback_score"]["smoke_passed"] is True
+    assert [assignment.target_path for assignment in selected.assignments] == [
+        "id",
+        "name",
+        "status",
+        "duration_days",
+        "assignee",
+        "tags",
+    ]
+
+
+def test_deterministic_fallback_candidate_passes_wrapped_dynamic_smoke() -> None:
+    """Verify fallback uses dynamic schema semantics instead of static paths."""
+
+    module = _load_example_module()
+    target_schema = build_target_schema_card(module.SyntheticBenchmarkTask)
+    source_schema = _dynamic_source_schema()
+    schema_coverage_report = module._build_schema_coverage_report(source_schema)
+
+    fallback = module._build_deterministic_fallback_mapping_candidate(
+        source_schema=source_schema,
+        schema_coverage_report=schema_coverage_report,
+    )
+    validation = MappingIRValidator().validate(
+        fallback,
+        source_schema=source_schema,
+        target_schema=target_schema,
+    )
+    smoke_score = module._score_mapping_candidate_smoke(
+        fallback,
+        candidate_index=module.DETERMINISTIC_FALLBACK_CANDIDATE_INDEX,
+        validation=validation,
+        smoke_scenarios=_dynamic_smoke_scenarios(module),
+    )
+
+    fallback_paths = {source_ref.path for source_ref in fallback.source_refs}
+    assert validation.valid is True
+    assert {
+        "task.task_id",
+        "task.title",
+        "task.state",
+        "task.state_label",
+        "task.status.details",
+        "task.days",
+        "task.owner",
+        "task.labels",
+    }.issubset(fallback_paths)
+    assert smoke_score["compile_success"] is True
+    assert smoke_score["execution_success_rate"] == 1.0
+    assert smoke_score["required_field_accuracy"] == 1.0
+    assert smoke_score["runtime_errors"] == {}
+    assert smoke_score["smoke_passed"] is True
 
 
 def test_select_mapping_candidate_repairs_status_surface_precondition_failure() -> None:
@@ -752,6 +813,118 @@ def _static_smoke_scenarios(module: ModuleType) -> list[BenchmarkScenario]:
                         "status": {"details": "done"},
                         "duration_days": 1,
                         "assignee": "Lin",
+                    },
+                    expected_output={
+                        "id": "TASK-4",
+                        "name": "Missing tags row",
+                        "status": "done",
+                        "duration_days": 1,
+                        "assignee": "Lin",
+                        "tags": [],
+                    },
+                    required_fields=list(module.REQUIRED_TASK_FIELDS),
+                ),
+            ],
+        ),
+    ]
+
+
+def _dynamic_smoke_scenarios(module: ModuleType) -> list[BenchmarkScenario]:
+    """Build wrapped base, rename, nesting, and missing-tag smoke cases."""
+
+    return [
+        BenchmarkScenario(
+            name="dynamic-smoke-base",
+            target_model=module.SyntheticBenchmarkTask,
+            cases=[
+                BenchmarkCase(
+                    name="base",
+                    record={
+                        "task": {
+                            "task_id": "TASK-1",
+                            "title": "Base row",
+                            "state": "todo",
+                            "days": 3,
+                            "owner": "Ada",
+                            "labels": ["base", "tagged"],
+                        }
+                    },
+                    expected_output={
+                        "id": "TASK-1",
+                        "name": "Base row",
+                        "status": "todo",
+                        "duration_days": 3,
+                        "assignee": "Ada",
+                        "tags": ["base", "tagged"],
+                    },
+                    required_fields=list(module.REQUIRED_TASK_FIELDS),
+                )
+            ],
+        ),
+        BenchmarkScenario(
+            name="dynamic-smoke-rename",
+            target_model=module.SyntheticBenchmarkTask,
+            cases=[
+                BenchmarkCase(
+                    name="rename",
+                    record={
+                        "task": {
+                            "task_id": "TASK-2",
+                            "title": "Rename row",
+                            "state_label": "doing",
+                            "days": 5,
+                            "owner": "Grace",
+                            "labels": ["rename"],
+                        }
+                    },
+                    expected_output={
+                        "id": "TASK-2",
+                        "name": "Rename row",
+                        "status": "doing",
+                        "duration_days": 5,
+                        "assignee": "Grace",
+                        "tags": ["rename"],
+                    },
+                    required_fields=list(module.REQUIRED_TASK_FIELDS),
+                )
+            ],
+        ),
+        BenchmarkScenario(
+            name="dynamic-smoke-nesting",
+            target_model=module.SyntheticBenchmarkTask,
+            cases=[
+                BenchmarkCase(
+                    name="nesting",
+                    record={
+                        "task": {
+                            "task_id": "TASK-3",
+                            "title": "Nested row",
+                            "status": {"details": "blocked"},
+                            "days": 8,
+                            "owner": None,
+                            "labels": ["nested"],
+                        }
+                    },
+                    expected_output={
+                        "id": "TASK-3",
+                        "name": "Nested row",
+                        "status": "blocked",
+                        "duration_days": 8,
+                        "assignee": None,
+                        "tags": ["nested"],
+                    },
+                    required_fields=list(module.REQUIRED_TASK_FIELDS),
+                ),
+                BenchmarkCase(
+                    name="missing-tags",
+                    record={
+                        "task": {
+                            "task_id": "TASK-4",
+                            "title": "Missing tags row",
+                            "status": {"details": "done"},
+                            "days": 1,
+                            "owner": "Lin",
+                        }
                     },
                     expected_output={
                         "id": "TASK-4",

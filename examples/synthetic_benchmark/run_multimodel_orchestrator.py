@@ -63,6 +63,7 @@ DEFAULT_BENCHMARK_RUN_COUNT = 1
 SCHEMA_BUDGET = 1800
 MAPPING_CANDIDATE_COUNT = 2
 MAPPING_REPAIR_BUDGET = 1
+DETERMINISTIC_FALLBACK_CANDIDATE_INDEX = -1
 REQUIRED_TASK_FIELDS = ("id", "name", "status", "duration_days", "tags")
 REQUIRED_SOURCE_SEMANTICS = ("id", "name", "status", "duration_days", "tags", "assignee")
 STATIC_DATASET_NAME = "static"
@@ -149,6 +150,7 @@ def run_orchestrator(
     scenario_seed: int = DEFAULT_SCENARIO_SEED,
     task_count: int = DEFAULT_TASK_COUNT,
     benchmark_run_count: int = DEFAULT_BENCHMARK_RUN_COUNT,
+    fallback_baseline_comparison: bool = False,
     template_generation_client: Any | None = None,
     converter_clients: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -159,6 +161,8 @@ def run_orchestrator(
         scenario_seed: Deterministic seed used for canonical scenario sampling.
         task_count: Number of synthetic tasks per benchmark bundle.
         benchmark_run_count: Number of repeated benchmark executions per converter.
+        fallback_baseline_comparison: Include the deterministic fallback in
+            runtime smoke selection even when an LLM candidate passes.
         template_generation_client: Optional injected OpenAI-compatible client for
             LLM template generation.
         converter_clients: Optional mapping from converter endpoint name to injected
@@ -199,6 +203,7 @@ def run_orchestrator(
                     endpoint=endpoint,
                     output_dir=resolved_output_dir / "converter_runs" / dataset.dataset_name / endpoint.name,
                     benchmark_run_count=benchmark_run_count,
+                    fallback_baseline_comparison=fallback_baseline_comparison,
                     client=converter_client_map.get(endpoint.name),
                 )
             )
@@ -208,6 +213,7 @@ def run_orchestrator(
         "scenario_seed": scenario_seed,
         "task_count": task_count,
         "benchmark_run_count": benchmark_run_count,
+        "fallback_baseline_comparison": fallback_baseline_comparison,
         "template_generator_endpoint": _endpoint_payload(TEMPLATE_GENERATOR_ENDPOINT),
         "converter_endpoints": [
             _endpoint_payload(endpoint)
@@ -281,12 +287,21 @@ def main() -> int:
         default=DEFAULT_BENCHMARK_RUN_COUNT,
         help="Number of repeated benchmark runs per synthesized converter.",
     )
+    parser.add_argument(
+        "--fallback-baseline-comparison",
+        action="store_true",
+        help=(
+            "Include the deterministic fallback mapping in runtime smoke selection "
+            "even when an LLM candidate passes."
+        ),
+    )
     args = parser.parse_args()
     summary = run_orchestrator(
         output_dir=args.output_dir,
         scenario_seed=args.scenario_seed,
         task_count=args.task_count,
         benchmark_run_count=args.benchmark_run_count,
+        fallback_baseline_comparison=args.fallback_baseline_comparison,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
@@ -519,6 +534,7 @@ def _run_converter_generation(
     endpoint: ModelEndpointConfig,
     output_dir: Path,
     benchmark_run_count: int,
+    fallback_baseline_comparison: bool,
     client: Any | None,
 ) -> dict[str, Any]:
     """Generate, compile, and benchmark one converter model on one dataset.
@@ -528,6 +544,8 @@ def _run_converter_generation(
         endpoint: Converter model endpoint configuration.
         output_dir: Directory where run artifacts should be written.
         benchmark_run_count: Number of repeated benchmark executions.
+        fallback_baseline_comparison: Include the deterministic fallback in
+            runtime smoke selection even when an LLM candidate passes.
         client: Optional injected OpenAI-compatible client.
 
     Returns:
@@ -627,8 +645,10 @@ def _run_converter_generation(
     mapping_ir, mapping_selection = _select_mapping_candidate(
         mapping_result,
         source_schema=source_schema,
+        schema_coverage_report=schema_coverage_report,
         target_schema=target_schema,
         smoke_scenarios=dataset.scenarios,
+        fallback_baseline_comparison=fallback_baseline_comparison,
     )
     mapping_preflight_report = _build_mapping_preflight_report(
         mapping_ir,
@@ -715,6 +735,7 @@ def _run_converter_generation(
         "mapping_candidate_count": len(mapping_result.candidates),
         "selected_mapping_candidate_index": mapping_selection["selected_candidate_index"],
         "mapping_repair_applied": bool(mapping_selection.get("repair_applied")),
+        "mapping_fallback_used": bool(mapping_selection.get("fallback_used")),
         "mapping_validation": mapping_validation.model_dump(mode="json"),
         "schema_completion_report": schema_completion_report,
         "schema_coverage_report": schema_coverage_report,
@@ -1361,24 +1382,232 @@ def _require_parsed(response: Any, *, label: str) -> Any:
     raise RuntimeError(f"Failed to generate {label}: {error_messages}")
 
 
+def _build_deterministic_fallback_mapping_candidate(
+    *,
+    source_schema: SourceSchemaSpec,
+    schema_coverage_report: dict[str, Any],
+) -> MappingIR:
+    """Build the offline synthetic task fallback MappingIR from schema evidence."""
+
+    field_by_path = {field.path: field for field in source_schema.fields}
+
+    def semantic_paths(semantic: str) -> list[str]:
+        payload = schema_coverage_report.get("required_semantics", {}).get(semantic, {})
+        coverage_paths = [
+            path
+            for path in payload.get("paths", [])
+            if path in field_by_path and _field_matches_required_semantic(field_by_path[path], semantic)
+        ]
+        if not coverage_paths:
+            coverage_paths = _source_paths_for_required_semantic(source_schema, semantic)
+        ordered_paths = sorted(
+            _dedupe_preserve_order(coverage_paths),
+            key=lambda path: _fallback_path_sort_key(field_by_path[path], semantic),
+        )
+        if not ordered_paths:
+            raise RuntimeError(
+                f"Cannot build deterministic fallback mapping: missing source semantic {semantic!r}"
+            )
+        return ordered_paths
+
+    source_refs: list[SourceReference] = []
+    source_ref_by_path: dict[str, str] = {}
+
+    def add_source_ref(semantic: str, path: str, *, index: int | None = None) -> str:
+        if path in source_ref_by_path:
+            return source_ref_by_path[path]
+        field = field_by_path[path]
+        suffix = f"_{index}" if index is not None else ""
+        ref_id = f"fallback_{semantic}{suffix}"
+        source_ref_by_path[path] = ref_id
+        source_refs.append(
+            SourceReference(
+                id=ref_id,
+                path=field.path,
+                dtype=field.dtype,
+                cardinality=field.cardinality,
+                description=(
+                    "Deterministic synthetic task fallback source for "
+                    f"{semantic}."
+                ),
+            )
+        )
+        return ref_id
+
+    id_ref = add_source_ref("id", semantic_paths("id")[0])
+    name_ref = add_source_ref("name", semantic_paths("name")[0])
+    duration_ref = add_source_ref("duration_days", semantic_paths("duration_days")[0])
+    assignee_ref = add_source_ref("assignee", semantic_paths("assignee")[0])
+    tags_ref = add_source_ref("tags", semantic_paths("tags")[0])
+    status_refs = [
+        add_source_ref("status", path, index=index)
+        for index, path in enumerate(semantic_paths("status"))
+    ]
+
+    return MappingIR(
+        source_refs=source_refs,
+        steps=[
+            MappingStep(
+                id="fallback_copy_id",
+                operation=StepOperation(kind="copy", source_ref=id_ref),
+                description="Copy task identifier from deterministic schema evidence.",
+            ),
+            MappingStep(
+                id="fallback_copy_name",
+                operation=StepOperation(kind="copy", source_ref=name_ref),
+                description="Copy task title from deterministic schema evidence.",
+            ),
+            MappingStep(
+                id="fallback_derive_status",
+                operation=StepOperation(
+                    kind="derive",
+                    source_refs=status_refs,
+                    expression=f"first_non_null({', '.join(status_refs)})",
+                ),
+                description="Resolve status from every discovered status surface.",
+            ),
+            MappingStep(
+                id="fallback_cast_duration_days",
+                operation=StepOperation(kind="cast", source_ref=duration_ref, to_type="int"),
+                description="Cast task duration to the target integer contract.",
+            ),
+            MappingStep(
+                id="fallback_copy_assignee",
+                operation=StepOperation(kind="copy", source_ref=assignee_ref),
+                description="Copy optional assignee from deterministic schema evidence.",
+            ),
+            MappingStep(
+                id="fallback_default_tags",
+                operation=StepOperation(kind="default", source_ref=tags_ref, value=[]),
+                description="Default missing optional tag lists to an empty list.",
+            ),
+        ],
+        assignments=[
+            TargetAssignment(step_id="fallback_copy_id", target_path="id"),
+            TargetAssignment(step_id="fallback_copy_name", target_path="name"),
+            TargetAssignment(step_id="fallback_derive_status", target_path="status"),
+            TargetAssignment(step_id="fallback_cast_duration_days", target_path="duration_days"),
+            TargetAssignment(step_id="fallback_copy_assignee", target_path="assignee"),
+            TargetAssignment(step_id="fallback_default_tags", target_path="tags"),
+        ],
+    )
+
+
+def _fallback_path_sort_key(field: SourceFieldSpec, semantic: str) -> tuple[int, int, str]:
+    """Sort fallback source paths by semantic fit before lexical stability."""
+
+    clean_path = field.path.replace("[]", "")
+    leaf = _slugify_identifier(_leaf_name(clean_path))
+    path_slug = _slugify_identifier(clean_path)
+    semantic_name = _slugify_identifier(field.semantic_name or "")
+    tokens = {
+        leaf,
+        path_slug,
+        semantic_name,
+        *(_slugify_identifier(alias) for alias in field.aliases),
+    }
+    preferred_tokens = {
+        "id": ("task_id", "id", "entity_id"),
+        "name": ("task_name", "title", "name"),
+        "duration_days": ("duration_days", "task_duration_days", "days", "duration"),
+        "assignee": ("assignee", "assigned_to", "owner"),
+        "tags": ("tags", "labels", "tag", "label"),
+        "status": (
+            "status_text",
+            "status",
+            "state",
+            "status_text_label",
+            "status_label",
+            "state_label",
+            "status_details",
+            "status_nested",
+            "details",
+        ),
+    }.get(semantic, (semantic,))
+    token_rank = next(
+        (index for index, token in enumerate(preferred_tokens) if token in tokens),
+        len(preferred_tokens),
+    )
+    return (token_rank, clean_path.count("."), clean_path)
+
+
+def _score_deterministic_fallback_mapping_candidate(
+    *,
+    source_schema: SourceSchemaSpec,
+    schema_coverage_report: dict[str, Any],
+    target_schema: TargetSchemaCard,
+    smoke_scenarios: Sequence[BenchmarkScenario],
+) -> tuple[MappingIR, Any, dict[str, Any]]:
+    """Build, validate, and smoke-score the deterministic fallback candidate."""
+
+    fallback = _build_deterministic_fallback_mapping_candidate(
+        source_schema=source_schema,
+        schema_coverage_report=schema_coverage_report,
+    )
+    validation = MappingIRValidator().validate(
+        fallback,
+        source_schema=source_schema,
+        target_schema=target_schema,
+    )
+    score = _score_mapping_candidate_smoke(
+        fallback,
+        candidate_index=DETERMINISTIC_FALLBACK_CANDIDATE_INDEX,
+        validation=validation,
+        smoke_scenarios=smoke_scenarios,
+    )
+    return fallback, validation, score
+
+
+def _fallback_selection_report(
+    *,
+    fallback_validation: Any,
+    fallback_score: dict[str, Any],
+    candidate_scores: list[dict[str, Any]],
+    repair_reports: list[dict[str, Any]],
+    fallback_baseline_comparison: bool,
+) -> dict[str, Any]:
+    """Build a mapping-selection report for deterministic fallback usage."""
+
+    return {
+        "selected_candidate_index": DETERMINISTIC_FALLBACK_CANDIDATE_INDEX,
+        "selected_candidate_id": "deterministic_fallback",
+        "selection_mode": "runtime_smoke_fallback_candidate",
+        "repair_applied": False,
+        "fallback_used": True,
+        "fallback_baseline_comparison": fallback_baseline_comparison,
+        "initial_validation": fallback_validation.model_dump(mode="json"),
+        "validation_summary": fallback_score["validation_summary"],
+        "smoke_score": fallback_score["smoke_score"],
+        "fallback_score": fallback_score,
+        "candidate_scores": candidate_scores,
+        "repair_reports": repair_reports,
+    }
+
+
 def _select_mapping_candidate(
     mapping_result: Any,
     *,
     source_schema: SourceSchemaSpec,
+    schema_coverage_report: dict[str, Any] | None = None,
     target_schema: TargetSchemaCard,
     smoke_scenarios: Sequence[BenchmarkScenario] | None = None,
     repair_budget: int = MAPPING_REPAIR_BUDGET,
+    fallback_baseline_comparison: bool = False,
 ) -> tuple[MappingIR, dict[str, Any]]:
     """Pick the best valid mapping candidate using runtime smoke evidence.
 
     Args:
         mapping_result: Ordered mapping synthesis result returned by the orchestrator.
         source_schema: Canonical source schema available to the current run.
+        schema_coverage_report: Completed source semantic coverage used to build
+            the deterministic fallback candidate.
         target_schema: Canonical target schema card.
         smoke_scenarios: Optional benchmark scenarios used for deterministic
             compile/runtime candidate smoke ranking.
         repair_budget: Maximum deterministic repair attempts for smoke-failed
             validator-valid candidates.
+        fallback_baseline_comparison: Include the deterministic fallback in the
+            smoke-ranked pool even when an LLM candidate passes.
 
     Returns:
         Tuple of selected mapping IR and machine-readable selection report.
@@ -1388,6 +1617,20 @@ def _select_mapping_candidate(
         smoke_scenarios or [],
         source_schema=source_schema,
     )
+    coverage_report = schema_coverage_report or _build_schema_coverage_report(source_schema)
+    fallback_cache: tuple[MappingIR, Any, dict[str, Any]] | None = None
+
+    def score_fallback() -> tuple[MappingIR, Any, dict[str, Any]]:
+        nonlocal fallback_cache
+        if fallback_cache is None:
+            fallback_cache = _score_deterministic_fallback_mapping_candidate(
+                source_schema=source_schema,
+                schema_coverage_report=coverage_report,
+                target_schema=target_schema,
+                smoke_scenarios=smoke_subset,
+            )
+        return fallback_cache
+
     scored_candidates: list[tuple[Any, dict[str, Any]]] = []
     for candidate in mapping_result.candidates:
         if candidate.ranked.validation.valid and candidate.ranked.candidate is not None:
@@ -1396,6 +1639,7 @@ def _select_mapping_candidate(
                     "selected_candidate_index": candidate.index,
                     "selection_mode": "direct_valid_candidate",
                     "repair_applied": False,
+                    "fallback_used": False,
                     "initial_validation": candidate.ranked.validation.model_dump(mode="json"),
                 }
             scored_candidates.append(
@@ -1454,11 +1698,29 @@ def _select_mapping_candidate(
                 passing_candidates,
                 key=lambda item: _mapping_smoke_selection_key(item[2], item[0]),
             )
+            fallback_score: dict[str, Any] | None = None
+            if fallback_baseline_comparison:
+                fallback_program, fallback_validation, fallback_score = score_fallback()
+                fallback_key = _mapping_smoke_selection_key_for_index(
+                    fallback_score,
+                    DETERMINISTIC_FALLBACK_CANDIDATE_INDEX,
+                )
+                selected_key = _mapping_smoke_selection_key(selected_score, selected_candidate)
+                if fallback_score["smoke_passed"] and fallback_key >= selected_key:
+                    return fallback_program, _fallback_selection_report(
+                        fallback_validation=fallback_validation,
+                        fallback_score=fallback_score,
+                        candidate_scores=candidate_scores,
+                        repair_reports=repair_reports,
+                        fallback_baseline_comparison=fallback_baseline_comparison,
+                    )
             if selected_repair_report is not None:
-                return selected_program, {
+                report = {
                     "selected_candidate_index": selected_candidate.index,
                     "selection_mode": "runtime_smoke_repaired_candidate",
                     "repair_applied": True,
+                    "fallback_used": False,
+                    "fallback_baseline_comparison": fallback_baseline_comparison,
                     "initial_validation": selected_candidate.ranked.validation.model_dump(mode="json"),
                     "validation_summary": selected_score["validation_summary"],
                     "smoke_score": selected_score["smoke_score"],
@@ -1466,16 +1728,34 @@ def _select_mapping_candidate(
                     "repair_report": selected_repair_report,
                     "repair_reports": repair_reports,
                 }
-            return selected_candidate.ranked.candidate, {
+                if fallback_score is not None:
+                    report["fallback_score"] = fallback_score
+                return selected_program, report
+            report = {
                 "selected_candidate_index": selected_candidate.index,
                 "selection_mode": "runtime_smoke_ranked_candidate",
                 "repair_applied": False,
+                "fallback_used": False,
+                "fallback_baseline_comparison": fallback_baseline_comparison,
                 "initial_validation": selected_candidate.ranked.validation.model_dump(mode="json"),
                 "validation_summary": selected_score["validation_summary"],
                 "smoke_score": selected_score["smoke_score"],
                 "candidate_scores": candidate_scores,
                 "repair_reports": repair_reports,
             }
+            if fallback_score is not None:
+                report["fallback_score"] = fallback_score
+            return selected_candidate.ranked.candidate, report
+
+        fallback_program, fallback_validation, fallback_score = score_fallback()
+        if fallback_validation.valid and fallback_score["smoke_passed"]:
+            return fallback_program, _fallback_selection_report(
+                fallback_validation=fallback_validation,
+                fallback_score=fallback_score,
+                candidate_scores=candidate_scores,
+                repair_reports=repair_reports,
+                fallback_baseline_comparison=fallback_baseline_comparison,
+            )
 
         detail = "; ".join(
             (
@@ -1488,7 +1768,8 @@ def _select_mapping_candidate(
         )
         raise RuntimeError(
             "Mapping synthesis produced validator-valid candidates, but none passed "
-            f"runtime smoke selection. Details: {detail}"
+            f"runtime smoke selection. Details: {detail}; "
+            f"fallback={fallback_score}"
         )
 
     diagnostics: list[str] = []
@@ -1516,10 +1797,38 @@ def _select_mapping_candidate(
         )
         repair_report["post_repair_validation"] = validation.model_dump(mode="json")
         if validation.valid:
+            if smoke_subset:
+                score = _score_mapping_candidate_smoke(
+                    repaired_candidate,
+                    candidate_index=candidate.index,
+                    validation=validation,
+                    smoke_scenarios=smoke_subset,
+                )
+                repair_report["post_repair_smoke_score"] = score
+                if not score["smoke_passed"]:
+                    diagnostics.append(
+                        f"candidate {candidate.index}: repaired candidate failed runtime smoke "
+                        f"with execution_success_rate={score['execution_success_rate']:.3f}"
+                    )
+                    continue
+                return repaired_candidate, {
+                    "selected_candidate_index": candidate.index,
+                    "selection_mode": "repaired_candidate",
+                    "repair_applied": repair_report["repair_applied"],
+                    "fallback_used": False,
+                    "fallback_baseline_comparison": fallback_baseline_comparison,
+                    "initial_validation": candidate.ranked.validation.model_dump(mode="json"),
+                    "validation_summary": score["validation_summary"],
+                    "smoke_score": score["smoke_score"],
+                    "candidate_scores": [score],
+                    "repair_report": repair_report,
+                }
             return repaired_candidate, {
                 "selected_candidate_index": candidate.index,
                 "selection_mode": "repaired_candidate",
                 "repair_applied": repair_report["repair_applied"],
+                "fallback_used": False,
+                "fallback_baseline_comparison": fallback_baseline_comparison,
                 "initial_validation": candidate.ranked.validation.model_dump(mode="json"),
                 "repair_report": repair_report,
             }
@@ -1528,6 +1837,19 @@ def _select_mapping_candidate(
             f"candidate {candidate.index}: {issue.location}: {issue.message}"
             for issue in validation.issues
         )
+
+    if smoke_subset:
+        fallback_program, fallback_validation, fallback_score = score_fallback()
+        if fallback_validation.valid and fallback_score["smoke_passed"]:
+            report = _fallback_selection_report(
+                fallback_validation=fallback_validation,
+                fallback_score=fallback_score,
+                candidate_scores=[],
+                repair_reports=[],
+                fallback_baseline_comparison=fallback_baseline_comparison,
+            )
+            report["candidate_diagnostics"] = diagnostics
+            return fallback_program, report
 
     detail = "; ".join(diagnostics) if diagnostics else "no mapping candidates were returned"
     raise RuntimeError(f"Mapping synthesis did not produce a valid candidate. Details: {detail}")
@@ -1691,7 +2013,13 @@ def _score_mapping_candidate_smoke(
             "runtime_error_count": runtime_error_count,
             "runtime_errors": runtime_errors,
             "smoke_score": smoke_score,
-            "smoke_passed": bool(case_results) and execution_success_rate > 0.0,
+            "smoke_passed": (
+                bool(case_results)
+                and runtime_error_count == 0
+                and execution_success_rate >= 1.0
+                and structural_validity_rate >= 1.0
+                and required_field_accuracy >= 1.0
+            ),
         }
     )
     return report
@@ -1966,12 +2294,21 @@ def _target_field_has_empty_list_default(field: Any | None) -> bool:
 def _mapping_smoke_selection_key(score: dict[str, Any], candidate: Any) -> tuple[float, float, float, float, float]:
     """Build a deterministic sort key for smoke-ranked candidates."""
 
+    return _mapping_smoke_selection_key_for_index(score, candidate.index)
+
+
+def _mapping_smoke_selection_key_for_index(
+    score: dict[str, Any],
+    candidate_index: int,
+) -> tuple[float, float, float, float, float]:
+    """Build a deterministic sort key from a smoke score and candidate index."""
+
     return (
         float(score["smoke_score"]),
         float(score["execution_success_rate"]),
         float(score["structural_validity_rate"]),
         float(score["required_field_accuracy"]),
-        -float(candidate.index),
+        -float(candidate_index),
     )
 
 
